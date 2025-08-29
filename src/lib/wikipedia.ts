@@ -21,6 +21,8 @@ export interface GameSession {
   startTime: number;
   endTime?: number;
   completed: boolean;
+  solutionPath?: string[];
+  solutionDistance?: number;
 }
 
 const WIKIPEDIA_API_BASE = "https://en.wikipedia.org/w/api.php";
@@ -259,12 +261,14 @@ function removeAudioVideo(html: string): string {
   // Remove Wikipedia notice boxes at the top (disambiguation, cleanup notices, etc.)
   content = content.replace(/<table[^>]*class="[^"]*(?:ambox|dmbox|tmbox|cmbox|fmbox|imbox|ombox)[^"]*"[^>]*>[\s\S]*?<\/table>/gi, '');
   content = content.replace(/<div[^>]*class="[^"]*(?:hatnote|dablink|rellink)[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-  content = content.replace(/<div[^>]*class="[^"]*navbox[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+  // NOTE: We intentionally keep navboxes to preserve intra-article links used by Six Degrees paths.
+  // If we want to visually hide them while retaining links, we can do that via CSS on .navbox.
+  // content = content.replace(/<div[^>]*class="[^"]*navbox[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
   
   // Remove "For other uses" and similar disambiguation notices
   content = content.replace(/<div[^>]*class="[^"]*(?:noprint|plainlinks|hlist)[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
   
-  // Remove maintenance templates and notices
+  // Remove maintenance templates and notices (keep navbox-style navigation retained above)
   content = content.replace(/<div[^>]*(?:role="note"|class="[^"]*(?:mbox-|notice)[^"]*")[^>]*>[\s\S]*?<\/div>/gi, '');
   
   // Remove External links section

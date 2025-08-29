@@ -9,7 +9,7 @@ import { Card, CardContent } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 
 export default function HomePage() {
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const isLoading = status === "loading";
   const isAuthenticated = status === "authenticated";
 

@@ -15,6 +15,7 @@ import {
   type WikipediaPage,
   type GameSession 
 } from "~/lib/wikipedia";
+import { chooseValidatedStartAndEnd } from "~/lib/six-degrees";
 
 // No external props now; game lifecycle managed internally
 
@@ -253,31 +254,42 @@ export function WikiRaceGame() {
     currentPageRef.current = "";
     // Reset cache for a fresh session
     contentCacheRef.current = new Map();
+  // If a game is currently active, clear it so the global loading spinner view appears
+  setGameSession(null);
     
     try {
-      const [startPageData, endPage] = await Promise.all([
-        getRandomPageWithContent(),
-        getRandomPage()
-      ]);
-
-      if (startPageData.page.title === endPage.title) {
-        return startNewGame();
-      }
+      const result = await chooseValidatedStartAndEnd<WikipediaPage>(
+        () => getRandomPageWithContent(),
+        () => getRandomPage(),
+        (title) => getPageContent(title),
+        { maxDegrees: 10, endAttemptsPerStart: 2 }
+      );
+      const { startPageData, endPage, path: solutionPath, degrees } = result;
 
       const newSession: GameSession = {
         id: Math.random().toString(36).substring(7),
         startPage: startPageData.page,
-        endPage,
+        endPage: endPage as WikipediaPage,
         currentPage: startPageData.page,
         path: [startPageData.page],
         startTime: Date.now(),
         completed: false,
+        solutionPath,
+        solutionDistance: degrees,
       };
 
       currentPageRef.current = startPageData.page.title;
   setCurrentPageContent(startPageData.content);
   contentCacheRef.current.set(startPageData.page.title, startPageData.content);
   setGameSession(newSession);
+
+      // Diagnostic logging
+      console.info('[SixDegrees] Start:"' + newSession.startPage.title + '" End:"' + newSession.endPage.title + '" Degrees:', degrees, '(limit 10)\nPath:', solutionPath.join(' -> '));
+      if (degrees < 10) {
+        console.info('[SixDegrees] ✔ Within degree limit (degrees=' + degrees + ')');
+      } else if (degrees === 10) {
+        console.info('[SixDegrees] ✔ Reached boundary: 10 degrees');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to start game");
     } finally {
@@ -376,6 +388,28 @@ export function WikiRaceGame() {
   }, []);
 
   if (!gameSession) {
+    if (isLoading) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center gap-8 bg-muted/60 dark:bg-muted/30">
+          <div className="flex flex-col items-center gap-6">
+            <div className="relative w-28 h-28 sm:w-36 sm:h-36">
+              <Image
+                src="/Wiki_race.png"
+                alt="Wiki Race Logo"
+                fill
+                sizes="(max-width: 640px) 112px, 144px"
+                className="object-contain drop-shadow-lg"
+                priority
+              />
+            </div>
+            <div className="flex flex-col items-center gap-4">
+              <div className="h-20 w-20 rounded-full border-4 border-primary/30 border-t-primary animate-spin" aria-label="Loading" />
+              <p className="text-lg font-medium text-muted-foreground">Setting up game...</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="relative min-h-screen flex items-center justify-center px-4 py-16 bg-muted/60 dark:bg-muted/30">
         <Card className="w-full max-w-2xl shadow-xl border-border/60 backdrop-blur supports-[backdrop-filter]:bg-background/70">
@@ -408,7 +442,7 @@ export function WikiRaceGame() {
                 className="gap-2"
               >
                 <Play className="h-5 w-5" />
-                {isLoading ? "Setting up game..." : "Start New Game"}
+                Start New Game
               </Button>
               {error && <p className="text-red-500 text-sm">{error}</p>}
             </div>
@@ -459,9 +493,18 @@ export function WikiRaceGame() {
                 </div>
               </div>
               <div className="text-center">
-                <Button onClick={startNewGame} className="gap-2">
-                  <RotateCcw className="h-4 w-4" />
-                  Play Again
+                <Button onClick={startNewGame} className="gap-2" disabled={isLoading}>
+                  {isLoading ? (
+                    <>
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                      <span>Starting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <RotateCcw className="h-4 w-4" />
+                      <span>Play Again</span>
+                    </>
+                  )}
                 </Button>
               </div>
             </CardContent>
