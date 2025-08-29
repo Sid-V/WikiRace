@@ -131,7 +131,7 @@ export async function getRandomPageWithContent(): Promise<{ page: WikipediaPage;
 }
 
 // Get full page content with HTML for rendering
-export async function getPageContent(title: string): Promise<string> {
+export async function getPageContent(title: string, signal?: AbortSignal): Promise<string> {
   // Check cache first
   const cacheKey = title.toLowerCase().trim();
   const cachedContent = contentCache.get(cacheKey);
@@ -150,7 +150,7 @@ export async function getPageContent(title: string): Promise<string> {
     origin: "*",
   });
 
-  const response = await fetch(`${WIKIPEDIA_API_BASE}?${params}`);
+  const response = await fetch(`${WIKIPEDIA_API_BASE}?${params}` , { signal });
 
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}: Failed to fetch page`);
@@ -172,7 +172,8 @@ export async function getPageContent(title: string): Promise<string> {
   
   // Minimal cleanup - only remove audio/video and enhance images
   content = removeAudioVideo(content);
-  content = await enhanceImagesWithUrls(content, images, title);
+  // Defer expensive image URL enhancement until after main content cleanup (progress perceived faster)
+  content = await enhanceImagesWithUrls(content, images, title, signal);
   content = formatLinksOnly(content);
   content = addWikipediaStyles(content);
   
@@ -183,13 +184,14 @@ export async function getPageContent(title: string): Promise<string> {
 }
 
 // Enhance images with proper URLs from Wikipedia API while preserving layout
-async function enhanceImagesWithUrls(content: string, imageList: string[], _pageTitle: string): Promise<string> {
+async function enhanceImagesWithUrls(content: string, imageList: string[], _pageTitle: string, signal?: AbortSignal): Promise<string> {
   if (!imageList || imageList.length === 0) {
     return content;
   }
 
   // Get image info for all images to ensure proper display
-  const imagesToProcess = imageList.slice(0, 50); // Increase limit for better coverage
+  // Limit to first 20 images for speed; can be tuned
+  const imagesToProcess = imageList.slice(0, 20);
   
   try {
     const imageParams = new URLSearchParams({
@@ -202,7 +204,8 @@ async function enhanceImagesWithUrls(content: string, imageList: string[], _page
       origin: "*",
     });
 
-    const imageResponse = await fetch(`${WIKIPEDIA_API_BASE}?${imageParams}`);
+  if (signal?.aborted) return content;
+  const imageResponse = await fetch(`${WIKIPEDIA_API_BASE}?${imageParams}`, { signal });
     const imageJson: unknown = await imageResponse.json();
     if (isImageInfoResponse(imageJson)) {
       const pages = imageJson.query?.pages;
@@ -219,6 +222,7 @@ async function enhanceImagesWithUrls(content: string, imageList: string[], _page
           }
         });
         imageMap.forEach(({ url, thumburl }, filename) => {
+          if (signal?.aborted) return; // stop processing if aborted
           const escapedFilename = filename.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
           const patterns = [
             new RegExp(`src="[^"]*${escapedFilename}[^"]*"`, 'gi'),

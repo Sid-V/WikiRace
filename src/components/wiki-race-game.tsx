@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef, memo } from "react";
 import Image from "next/image";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { Clock, Target, Play, RotateCcw, ExternalLink } from "lucide-react";
+import { Clock, Target, Play, RotateCcw, ExternalLink, ArrowLeft } from "lucide-react";
 import { AuthButton } from "./auth-button";
 import { ModeToggle } from "./mode-toggle";
 import { GameTimer } from "./game-timer";
@@ -54,12 +54,14 @@ const WikiContent = memo(({ content, onLinkClick }: {
 WikiContent.displayName = 'WikiContent';
 
 // Memoized sidebar component
-const GameSidebar = memo(({ gameSession, startTime, isRunning, onNewGame, showNewGame }: { 
+const GameSidebar = memo(({ gameSession, startTime, isRunning, onNewGame, showNewGame, onPreviousPage, canGoBack }: { 
   gameSession: GameSession;
   startTime: number;
   isRunning: boolean;
   onNewGame: () => void;
   showNewGame: boolean;
+  onPreviousPage: () => void;
+  canGoBack: boolean;
 }) => (
   <div className="w-80 bg-card border-r border-border sticky top-0 h-screen overflow-hidden flex flex-col">
     <div className="p-6 border-b border-border">
@@ -113,7 +115,20 @@ const GameSidebar = memo(({ gameSession, startTime, isRunning, onNewGame, showNe
       </Card>
     </div>
     
-    <div className="flex-1 overflow-hidden">
+    <div className="flex-1 overflow-hidden flex flex-col">
+      {/* Previous page button (above Path Tracker) */}
+      <div className="px-6 pt-4 pb-2 border-b border-border">
+        <Button 
+          onClick={onPreviousPage}
+          variant="secondary"
+          size="sm"
+          disabled={!canGoBack || !isRunning}
+          className="gap-2 w-full justify-start"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          <span className="text-sm font-medium">Previous Wiki page</span>
+        </Button>
+      </div>
       <Card className="h-full rounded-none border-0">
         <CardHeader className="pb-4">
           <CardTitle className="text-lg">Path Tracker</CardTitle>
@@ -180,6 +195,8 @@ export function WikiRaceGame() {
   
   const currentPageRef = useRef<string>("");
   const navigationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const contentCacheRef = useRef<Map<string, string>>(new Map());
+  const fetchAbortRef = useRef<AbortController | null>(null);
 
   // Load page content
   const loadPageContent = useCallback(async (pageTitle: string) => {
@@ -192,10 +209,28 @@ export function WikiRaceGame() {
     setError(null);
     
     try {
+      // Abort any in-flight fetch
+      if (fetchAbortRef.current) {
+        fetchAbortRef.current.abort();
+      }
+      const controller = new AbortController();
+      fetchAbortRef.current = controller;
       const content = await getPageContent(pageTitle);
       // Only update if this is still the current page
       if (currentPageRef.current === pageTitle) {
         setCurrentPageContent(content);
+        // LRU update: refresh key order
+        if (contentCacheRef.current.has(pageTitle)) {
+          contentCacheRef.current.delete(pageTitle);
+        }
+        contentCacheRef.current.set(pageTitle, content);
+        // Enforce 20-page cap
+        if (contentCacheRef.current.size > 20) {
+          const oldestIter = contentCacheRef.current.keys().next();
+          if (!oldestIter.done) {
+            contentCacheRef.current.delete(oldestIter.value);
+          }
+        }
       }
     } catch (err) {
       if (currentPageRef.current === pageTitle) {
@@ -216,6 +251,8 @@ export function WikiRaceGame() {
     setError(null);
     setCurrentPageContent("");
     currentPageRef.current = "";
+    // Reset cache for a fresh session
+    contentCacheRef.current = new Map();
     
     try {
       const [startPageData, endPage] = await Promise.all([
@@ -238,7 +275,8 @@ export function WikiRaceGame() {
       };
 
       currentPageRef.current = startPageData.page.title;
-      setCurrentPageContent(startPageData.content);
+  setCurrentPageContent(startPageData.content);
+  contentCacheRef.current.set(startPageData.page.title, startPageData.content);
   setGameSession(newSession);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to start game");
@@ -281,6 +319,13 @@ export function WikiRaceGame() {
           });
 
           if (!isCompleted) {
+            // Optimistic placeholder: show cached content immediately if present
+            const cached = contentCacheRef.current.get(pageTitle);
+            if (cached) {
+              setCurrentPageContent(cached);
+            } else {
+              setCurrentPageContent('<p class="text-sm text-muted-foreground">Loading content...</p>');
+            }
             await loadPageContent(pageTitle);
           }
         } catch (err) {
@@ -290,6 +335,32 @@ export function WikiRaceGame() {
       void run();
     }, 150); // 150ms debounce
   }, [gameSession, isLoading, loadPageContent]);
+
+  // Navigate back to the previous page (append previous page again to the path)
+  const goToPreviousPage = useCallback(async () => {
+    let prevPageTitle: string | null = null;
+    setGameSession(prev => {
+      if (!prev || prev.completed || prev.path.length < 2) return prev;
+      const newPath = prev.path.slice(0, -1); // remove last page
+      const newCurrent = newPath[newPath.length - 1];
+      if (!newCurrent) return prev; // safety
+      prevPageTitle = newCurrent.title;
+      currentPageRef.current = newCurrent.title;
+      return {
+        ...prev,
+        currentPage: newCurrent,
+        path: newPath,
+      } as GameSession;
+    });
+    if (prevPageTitle) {
+      // If cached, use immediately, else fetch
+      if (contentCacheRef.current.has(prevPageTitle)) {
+        setCurrentPageContent(contentCacheRef.current.get(prevPageTitle) ?? "");
+      } else {
+        await loadPageContent(prevPageTitle);
+      }
+    }
+  }, [loadPageContent]);
 
   // Game completion handler
   // Effect placeholder for future side-effects when game completes
@@ -408,6 +479,8 @@ export function WikiRaceGame() {
         isRunning={!gameSession.completed}
         onNewGame={startNewGame}
         showNewGame={!gameSession.completed}
+  onPreviousPage={goToPreviousPage}
+  canGoBack={gameSession.path.length > 1}
       />
       
       <div className="flex-1 flex flex-col">
