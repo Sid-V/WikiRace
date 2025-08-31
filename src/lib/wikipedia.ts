@@ -99,38 +99,6 @@ export async function getRandomPage(): Promise<WikipediaPage> {
   };
 }
 
-// Get a random Wikipedia page with full content (for start page)
-export async function getRandomPageWithContent(): Promise<{ page: WikipediaPage; content: string }> {
-  const randomParams = new URLSearchParams({
-    action: "query",
-    format: "json",
-    list: "random",
-    rnnamespace: "0", // Main namespace only
-    rnlimit: "1",
-    origin: "*",
-  });
-
-  const randomResponse = await fetch(`${WIKIPEDIA_API_BASE}?${randomParams}`);
-  const randomJson: unknown = await randomResponse.json();
-  if (!isRandomQueryResponse(randomJson)) {
-    const apiErr = (randomJson as ApiError)?.error?.info;
-    throw new Error(apiErr ?? 'Unexpected random page response shape');
-  }
-  const randomTitle = randomJson.query.random[0]!.title;
-
-  // Get the content immediately
-  const content = await getPageContent(randomTitle);
-  
-  const page: WikipediaPage = {
-    pageid: 0,
-    title: randomTitle,
-    extract: "",
-    fullurl: `https://en.wikipedia.org/wiki/${encodeURIComponent(randomTitle)}`,
-    content: content,
-  };
-
-  return { page, content };
-}
 
 // Get full page content with HTML for rendering
 export async function getPageContent(title: string, signal?: AbortSignal): Promise<string> {
@@ -271,9 +239,9 @@ function removeAudioVideo(html: string): string {
   // Remove maintenance templates and notices (keep navbox-style navigation retained above)
   content = content.replace(/<div[^>]*(?:role="note"|class="[^"]*(?:mbox-|notice)[^"]*")[^>]*>[\s\S]*?<\/div>/gi, '');
   
-  // Remove External links section
-  content = content.replace(/<h2[^>]*><span[^>]*>External links<\/span>[\s\S]*?(?=<h[12][^>]*>|$)/gi, '');
-  content = content.replace(/<h2[^>]*>External links[\s\S]*?(?=<h[12][^>]*>|$)/gi, '');
+  // Keep External links section (needed for some SixDegrees paths)
+  // Tag the External links heading for optional CSS hiding
+  content = content.replace(/(<h2[^>]*>\s*<span[^>]*>\s*External links\s*<\/span>)/i, '<h2 class="ext-links" data-ext-links>External links');
   
   // Fix image URLs to use HTTPS
   content = content.replace(/\/\/upload\.wikimedia\.org/g, 'https://upload.wikimedia.org');
@@ -290,6 +258,18 @@ function formatLinksOnly(html: string): string {
   const template = document.createElement('template');
   template.innerHTML = html;
   const fragment = template.content;
+  // Remove scripts & inline event handlers
+  fragment.querySelectorAll('script').forEach(s => s.remove());
+  fragment.querySelectorAll('*').forEach(el => {
+    for (const attr of Array.from(el.attributes)) {
+      if (attr.name.startsWith('on')) {
+        el.removeAttribute(attr.name);
+      }
+      if (/mfTempOpenSection/i.test(attr.value)) {
+        el.removeAttribute(attr.name);
+      }
+    }
+  });
   
   // Fix image sources to ensure they load properly
   const images = fragment.querySelectorAll('img');
@@ -326,9 +306,16 @@ function formatLinksOnly(html: string): string {
       return;
     }
     
-    // Handle Wikipedia article links only
+    // Detect internal Wikipedia article links (relative or absolute with any subdomains, incl. mobile)
+    let pageName: string | null = null;
     if (href.startsWith('/wiki/')) {
-      const pageName = href.substring(6); // Remove "/wiki/"
+      pageName = href.substring(6);
+    } else {
+      const absMatch = href.match(/^https?:\/\/(?:[a-z0-9-]+\.)*wikipedia\.org\/wiki\/(.+)$/i)
+        || href.match(/^\/\/(?:[a-z0-9-]+\.)*wikipedia\.org\/wiki\/(.+)$/i);
+      if (absMatch) pageName = absMatch[1] ?? null;
+    }
+    if (pageName) {
       const decodedName = decodeURIComponent(pageName);
       
       // Only allow main namespace articles and some specific namespaces
@@ -365,6 +352,51 @@ function formatLinksOnly(html: string): string {
 function addWikipediaStyles(html: string): string {
   
   return `<div class="wikipedia-content">${html}</div>`;
+}
+
+// Progressive fetch: return fast initial HTML, enhance images asynchronously.
+export async function getPageContentProgressive(
+  title: string,
+  onEnhanced?: (html: string) => void,
+  signal?: AbortSignal
+): Promise<string> {
+  const cacheKey = title.toLowerCase().trim();
+  const cached = contentCache.get(cacheKey);
+  if (cached) return cached;
+
+  const params = new URLSearchParams({
+    action: "parse",
+    format: "json",
+    page: title,
+    prop: "text|images|sections",
+    disableeditsection: "false",
+    disabletoc: "false",
+    mobileformat: "false",
+    origin: "*",
+  });
+  const response = await fetch(`${WIKIPEDIA_API_BASE}?${params}`, { signal });
+  if (!response.ok) throw new Error(`HTTP ${response.status}: Failed to fetch page`);
+  const dataJson: unknown = await response.json();
+  const apiErr = (dataJson as ApiError)?.error?.info;
+  if (apiErr) throw new Error(apiErr);
+  if (!isParseResponseShape(dataJson)) throw new Error('Unexpected parse response shape');
+
+  let initial = dataJson.parse.text['*'];
+  const images = dataJson.parse.images ?? [];
+  initial = removeAudioVideo(initial);
+  initial = formatLinksOnly(initial);
+  initial = addWikipediaStyles(initial);
+  addToCache(cacheKey, initial);
+
+  void (async () => {
+    try {
+      const upgraded = await enhanceImagesWithUrls(initial, images, title, signal);
+      addToCache(cacheKey, upgraded);
+      onEnhanced?.(upgraded);
+    } catch { /* ignore */ }
+  })();
+
+  return initial;
 }
 
 

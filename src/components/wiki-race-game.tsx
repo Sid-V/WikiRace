@@ -10,12 +10,12 @@ import { ModeToggle } from "./mode-toggle";
 import { GameTimer } from "./game-timer";
 import { 
   getRandomPage, 
-  getRandomPageWithContent,
   getPageContent, 
+  getPageContentProgressive,
   type WikipediaPage,
   type GameSession 
 } from "~/lib/wikipedia";
-import { chooseValidatedStartAndEnd } from "~/lib/six-degrees";
+import { chooseValidatedStartAndEndConcurrent } from "~/lib/six-degrees";
 
 // No external props now; game lifecycle managed internally
 
@@ -193,6 +193,23 @@ export function WikiRaceGame() {
   const [currentPageContent, setCurrentPageContent] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Loading messages rotate while new game is being prepared
+  const loadingMessages = useRef<string[]>([
+    "Setting up a new game...",
+    "Making sure you can reach the end...",
+    "The light at the end of the tunnel...",
+    "Connecting the links...",
+    "Herding random Wikipedia pages..."
+  ]);
+  const [loadingMsgIndex, setLoadingMsgIndex] = useState(0);
+  useEffect(() => {
+    if (isLoading && !gameSession) {
+      const id = setInterval(() => {
+        setLoadingMsgIndex(i => (i + 1) % loadingMessages.current.length);
+      }, 3000);
+      return () => clearInterval(id);
+    }
+  }, [isLoading, gameSession]);
   
   const currentPageRef = useRef<string>("");
   const navigationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -216,7 +233,11 @@ export function WikiRaceGame() {
       }
       const controller = new AbortController();
       fetchAbortRef.current = controller;
-      const content = await getPageContent(pageTitle);
+      const content = await getPageContentProgressive(pageTitle, (enhanced) => {
+        if (currentPageRef.current === pageTitle) {
+          setCurrentPageContent(enhanced);
+        }
+      });
       // Only update if this is still the current page
       if (currentPageRef.current === pageTitle) {
         setCurrentPageContent(content);
@@ -258,8 +279,8 @@ export function WikiRaceGame() {
   setGameSession(null);
     
     try {
-      const result = await chooseValidatedStartAndEnd<WikipediaPage>(
-        () => getRandomPageWithContent(),
+      const result = await chooseValidatedStartAndEndConcurrent<WikipediaPage>(
+        () => getRandomPage(),
         () => getRandomPage(),
         (title) => getPageContent(title),
         { maxDegrees: 10, endAttemptsPerStart: 2 }
@@ -278,17 +299,19 @@ export function WikiRaceGame() {
         solutionDistance: degrees,
       };
 
-      currentPageRef.current = startPageData.page.title;
+  currentPageRef.current = startPageData.page.title;
   setCurrentPageContent(startPageData.content);
   contentCacheRef.current.set(startPageData.page.title, startPageData.content);
   setGameSession(newSession);
 
-      // Diagnostic logging
-      console.info('[SixDegrees] Start:"' + newSession.startPage.title + '" End:"' + newSession.endPage.title + '" Degrees:', degrees, '(limit 10)\nPath:', solutionPath.join(' -> '));
-      if (degrees < 10) {
-        console.info('[SixDegrees] ✔ Within degree limit (degrees=' + degrees + ')');
-      } else if (degrees === 10) {
-        console.info('[SixDegrees] ✔ Reached boundary: 10 degrees');
+      // Dev-only diagnostic logging (hidden in production)
+      if (process.env.NODE_ENV !== 'production') {
+        console.info('[SixDegrees] Start:"' + newSession.startPage.title + '" End:"' + newSession.endPage.title + '" Degrees:', degrees, '(limit 10)\nPath:', solutionPath.join(' -> '));
+        if (degrees < 10) {
+          console.info('[SixDegrees] ✔ Within degree limit (degrees=' + degrees + ')');
+        } else if (degrees === 10) {
+          console.info('[SixDegrees] ✔ Reached boundary: 10 degrees');
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to start game");
@@ -404,7 +427,9 @@ export function WikiRaceGame() {
             </div>
             <div className="flex flex-col items-center gap-4">
               <div className="h-20 w-20 rounded-full border-4 border-primary/30 border-t-primary animate-spin" aria-label="Loading" />
-              <p className="text-lg font-medium text-muted-foreground">Setting up game...</p>
+              <p className="text-lg font-medium text-muted-foreground text-center min-h-[1.5rem]">
+                {loadingMessages.current[loadingMsgIndex]}
+              </p>
             </div>
           </div>
         </div>
