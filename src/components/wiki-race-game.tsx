@@ -239,15 +239,15 @@ const StatsContent: React.FC = () => {
       try {
         const res = await fetch('/api/stats');
         if (!res.ok) throw new Error('Failed to load');
-        const json = await res.json();
-        if (active) setData(json);
-      } catch (e) {
+        const json: unknown = await res.json();
+        if (active) setData(json as { gamesPlayed: number; fastestDurationSeconds: number | null; averageDurationSeconds: number | null });
+      } catch {
         if (active) setError('Error loading stats');
       } finally {
         if (active) setLoading(false);
       }
     };
-    run();
+    void run();
     return () => { active = false; };
   }, []);
   if (loading) return <div className="text-sm">Loading...</div>;
@@ -266,7 +266,6 @@ const StatsContent: React.FC = () => {
 GameSidebar.displayName = 'GameSidebar';
 
 interface BackendGameStartResponse { gameId: string }
-interface BackendFinishResponse { durationSeconds: number; fastestDurationSeconds: number | null; averageDurationSeconds: number | null; gamesPlayed: number }
 
 export function WikiRaceGame() {
   const [gameSession, setGameSession] = useState<GameSession | null>(null);
@@ -362,8 +361,8 @@ export function WikiRaceGame() {
       try {
         const res = await fetch('/api/game/start', { method: 'POST' });
         if (res.ok) {
-          const data: BackendGameStartResponse = await res.json();
-            backendGameId = data.gameId;
+          const data = await res.json() as BackendGameStartResponse;
+          backendGameId = data.gameId;
         }
       } catch {/* ignore start failure; can still play local */}
 
@@ -376,7 +375,7 @@ export function WikiRaceGame() {
       const { startPageData, endPage, path: solutionPath, degrees } = result;
 
       const newSession: GameSession = {
-        id: backendGameId || Math.random().toString(36).substring(7),
+        id: backendGameId ?? Math.random().toString(36).substring(7),
         startPage: startPageData.page,
         endPage: endPage as WikipediaPage,
         currentPage: startPageData.page,
@@ -394,7 +393,7 @@ export function WikiRaceGame() {
 
       // Dev-only diagnostic logging (hidden in production)
       if (process.env.NODE_ENV !== 'production') {
-        console.info('[SixDegrees] Start:"' + newSession.startPage.title + '" End:"' + newSession.endPage.title + '" Degrees:', degrees, '(limit 10)\nPath:', solutionPath.join(' -> '));
+        console.info('[SixDegrees] Start:"' + newSession.startPage.title + '" End:"' + newSession.endPage.title + '" Degrees:', degrees, '(limit 6)\nPath:', solutionPath.join(' -> '));
         if (degrees < 10) {
           console.info('[SixDegrees] ✔ Within degree limit (degrees=' + degrees + ')');
         } else if (degrees === 10) {
@@ -528,7 +527,7 @@ export function WikiRaceGame() {
       } catch {/* ignore */}
     };
     void sendFinish();
-  }, [gameSession?.completed, gameSession?.endTime]);
+  }, [gameSession?.completed, gameSession?.endTime, gameSession?.id, gameSession?.startPage.title, gameSession?.endPage.title, gameSession?.path.length]);
 
   // Cleanup on unmount
   useEffect(() => {

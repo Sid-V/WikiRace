@@ -21,7 +21,7 @@ export const POST = async (request: Request) => {
   }
 
   try {
-    const result = await prisma.$transaction(async (tx: any) => {
+    const result = await prisma.$transaction(async (tx) => {
       const game = await tx.game.findUnique({ where: { id: body.gameId } });
       if (!game || game.endTime) {
         return { error: 'Game already finalized or not found' } as const;
@@ -38,7 +38,7 @@ export const POST = async (request: Request) => {
         },
       });
       
-      const durationSeconds = Math.max(1, Math.floor(((updatedGame.endTime as Date).getTime() - updatedGame.startTime.getTime()) / 1000));
+      const durationSeconds = Math.max(1, Math.floor((updatedGame.endTime!.getTime() - updatedGame.startTime.getTime()) / 1000));
       await tx.game.update({ where: { id: game.id }, data: { durationSeconds } });
 
       const existingStats = await tx.userStats.findUnique({ where: { userId: session.user.id } });
@@ -70,8 +70,8 @@ export const POST = async (request: Request) => {
     if ('error' in result) return NextResponse.json(result, { status: 409 });
     void cleanupOldGames();
     return NextResponse.json(result);
-  } catch (e) {
-    console.error('finish game error', e);
+  } catch (error: unknown) {
+    console.error('finish game error', error);
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 };

@@ -30,8 +30,8 @@ export const authConfig = {
       }
       return token;
     },
-    session: async ({ session, token }: { session: NextAuthSession; token: any }) => {
-      const userId = token.sub as string | undefined;
+    session: async ({ session, token }: { session: NextAuthSession; token: { sub?: string } }) => {
+      const userId = token.sub;
       let stats: { gamesPlayed: number; fastestDurationSeconds: number | null; averageDurationSeconds: number | null } | undefined;
       
       if (userId) {

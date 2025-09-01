@@ -271,4 +271,62 @@
 /* Ensure links in headers maintain color */
 .wikipedia-content table th a { color: #58a6ff !important; }
 
+/* --------------------------------------------- */
+/* Wikipedia navbox styling fixes               */
+/* --------------------------------------------- */
+.wikipedia-content .navbox,
+.wikipedia-content .navbox-subgroup,
+.wikipedia-content .navbox-inner,
+.wikipedia-content .navbox-list,
+.wikipedia-content .vertical-navbox {
+  background: #242830 !important;
+  border: 1px solid #30363d !important;
+  box-shadow: none !important;
+}
+
+.wikipedia-content .navbox table,
+.wikipedia-content .navbox-subgroup table,
+.wikipedia-content .vertical-navbox table {
+  background: transparent !important;
+  border: none !important;
+  margin: 0 !important;
+}
+
+.wikipedia-content .navbox th,
+.wikipedia-content .navbox-title,
+.wikipedia-content .navbox-abovebelow,
+.wikipedia-content .navbox-group {
+  background: #1c2026 !important;
+  border: 1px solid #30363d !important;
+  color: #f0f3f5 !important;
+}
+
+.wikipedia-content .navbox td,
+.wikipedia-content .navbox-list td {
+  background: #242830 !important;
+  border: 1px solid #30363d !important;
+  color: #e8e6e3 !important;
+}
+
+.wikipedia-content .navbox a {
+  color: #58a6ff !important;
+}
+
+.wikipedia-content .navbox a:hover {
+  color: #79c0ff !important;
+}
+
+/* Fix any remaining white borders in navboxes */
+.wikipedia-content .navbox *,
+.wikipedia-content .vertical-navbox *,
+.wikipedia-content .navbox-subgroup * {
+  border-color: #30363d !important;
+}
+
+/* Navbox toggle buttons */
+.wikipedia-content .navbox-toggle {
+  color: #8b949e !important;
+  font-size: 0.85em !important;
+}
+
 

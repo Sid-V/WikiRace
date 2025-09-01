@@ -22,14 +22,25 @@ interface ImageInfoResponse { query?: { pages?: Record<string, ImageInfoPage> } 
 
 const isRandomQueryResponse = (d: unknown): d is RandomQueryResponse => {
   if (!d || typeof d !== 'object') return false;
-  const random = (d as any).query?.random;
-  return Array.isArray(random) && random.every(r => r?.title);
+  const obj = d as Record<string, unknown>;
+  const query = obj.query;
+  if (!query || typeof query !== 'object') return false;
+  const random = (query as Record<string, unknown>).random;
+  return Array.isArray(random) && random.every((r: unknown) => r && typeof r === 'object' && 'title' in r);
 };
 
 const isParseResponseShape = (d: unknown): d is ParseResponseShape => {
   if (!d || typeof d !== 'object') return false;
-  const text = (d as any).parse?.text;
-  return typeof text === 'string' || (text && typeof (text as any)['*'] === 'string');
+  const obj = d as Record<string, unknown>;
+  const parse = obj.parse;
+  if (!parse || typeof parse !== 'object') return false;
+  const text = (parse as Record<string, unknown>).text;
+  if (typeof text === 'string') return true;
+  if (text && typeof text === 'object') {
+    const textObj = text as Record<string, unknown>;
+    return '*' in textObj && typeof textObj['*'] === 'string';
+  }
+  return false;
 };
 
 const isImageInfoResponse = (d: unknown): d is ImageInfoResponse => !!d && typeof d === 'object';
@@ -88,7 +99,7 @@ const extractHtml = (parse: ParseResponseShape): string => {
 
 // Optimized content sanitization
 const sanitizeContent = (html: string): { content: string; navboxes: string[] } => {
-  const navboxes = html.match(/<div[^>]*class="[^"]*navbox[^"]*"[\s\S]*?<\/div>/gi) || [];
+  const navboxes = html.match(/<div[^>]*class="[^"]*navbox[^"]*"[\s\S]*?<\/div>/gi) ?? [];
   
   const template = document.createElement('template');
   template.innerHTML = html;
@@ -129,7 +140,7 @@ const sanitizeContent = (html: string): { content: string; navboxes: string[] } 
   
   // Process links efficiently
   doc.querySelectorAll('a[href]').forEach(link => {
-    const href = link.getAttribute('href') || '';
+    const href = link.getAttribute('href') ?? '';
     
     if (href.startsWith('#')) {
       link.removeAttribute('href');
@@ -137,8 +148,8 @@ const sanitizeContent = (html: string): { content: string; navboxes: string[] } 
       return;
     }
     
-    const wikiMatch = href.match(/^(?:https?:\/\/(?:\w+\.)*wikipedia\.org)?\/wiki\/(.+)$/i) || 
-                     href.match(/^\/\/(?:\w+\.)*wikipedia\.org\/wiki\/(.+)$/i);
+    const wikiMatch = /^(?:https?:\/\/(?:\w+\.)*wikipedia\.org)?\/wiki\/(.+)$/i.exec(href) ?? 
+                     /^\/\/(?:\w+\.)*wikipedia\.org\/wiki\/(.+)$/i.exec(href);
     
     if (wikiMatch?.[1]) {
       const pageName = decodeURIComponent(wikiMatch[1]);
@@ -176,7 +187,7 @@ const sanitizeContent = (html: string): { content: string; navboxes: string[] } 
   });
   
   doc.querySelectorAll('h2').forEach(h2 => {
-    if (/external\s+links/i.test(h2.textContent || '')) {
+    if (/external\s+links/i.test(h2.textContent ?? '')) {
       h2.classList.add('ext-links');
       h2.setAttribute('data-ext-links', '');
     }
@@ -201,10 +212,12 @@ const enhanceImages = async (html: string, imageNames: string[], signal?: AbortS
     if (!pages) return html;
     
     const imageMap = new Map<string, ImageInfoItem>();
-    Object.values(pages as Record<string, ImageInfoPage>).forEach(p => {
-      const ii = p.imageinfo?.[0];
-      if (ii) imageMap.set(p.title.replace('File:', ''), { url: ii.url, thumburl: ii.thumburl });
-    });
+    if (pages && typeof pages === 'object') {
+      Object.values(pages).forEach(p => {
+        const ii = p.imageinfo?.[0];
+        if (ii) imageMap.set(p.title.replace('File:', ''), { url: ii.url, thumburl: ii.thumburl });
+      });
+    }
     
     imageMap.forEach(({ url, thumburl }, name) => {
       const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -213,14 +226,14 @@ const enhanceImages = async (html: string, imageNames: string[], signal?: AbortS
         new RegExp(`src="[^"]*File:${esc}[^"]*"`, 'gi'),
         new RegExp(`src="/wiki/File:${esc}[^"]*"`, 'gi')
       ];
-      patterns.forEach(r => { html = html.replace(r, `src="${thumburl || url}"`); });
+      patterns.forEach(r => { html = html.replace(r, `src="${thumburl ?? url}"`); });
     });
   } catch (e) { 
     console.warn('Image enhancement failed', e); 
   }
   
   return html.replace(/src="\/wiki\/File:([^"]+)"/gi, 
-    (_, f) => `src="https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(f)}"`);
+    (_, f: string) => `src="https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(f)}"`);
 };
 
 export const getPageContent = async (title: string, signal?: AbortSignal): Promise<string> => {

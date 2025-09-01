@@ -17,9 +17,11 @@ export const POST = async () => {
     });
     
     return NextResponse.json({ gameId: game.id }, { status: 201 });
-  } catch (e: any) {
-    console.error('Game start failed', e);
-    const detail = process.env.NODE_ENV === 'development' ? { message: e?.message } : {};
+  } catch (error: unknown) {
+    console.error('Game start failed', error);
+    const detail = process.env.NODE_ENV === 'development' && error instanceof Error 
+      ? { message: error.message } 
+      : {};
     return NextResponse.json({ error: 'Failed to start game', ...detail }, { status: 500 });
   }
 };
