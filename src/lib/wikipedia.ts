@@ -1,403 +1,293 @@
-// Wikipedia API service
+// Wikipedia API integration
+
 export interface WikipediaPage {
   pageid: number;
   title: string;
   extract: string;
-  thumbnail?: {
-    source: string;
-    width: number;
-    height: number;
-  };
+  thumbnail?: { source: string; width: number };
   fullurl: string;
   content?: string;
 }
 
-export interface GameSession {
-  id: string;
-  startPage: WikipediaPage;
-  endPage: WikipediaPage;
-  currentPage: WikipediaPage;
-  path: WikipediaPage[];
-  startTime: number;
-  endTime?: number;
-  completed: boolean;
-  solutionPath?: string[];
-  solutionDistance?: number;
-}
-
-const WIKIPEDIA_API_BASE = "https://en.wikipedia.org/w/api.php";
-
-// --------------------
-// Typed Wikipedia API helpers
-// --------------------
+const WIKIPEDIA_API_BASE = 'https://en.wikipedia.org/w/api.php';
 
 interface RandomItem { id: number; ns: number; title: string }
 interface RandomQueryResponse { query: { random: RandomItem[] } }
 interface ApiError { error: { code?: string; info: string } }
-
-function isRandomQueryResponse(data: unknown): data is RandomQueryResponse {
-  if (!data || typeof data !== 'object') return false;
-  const random = (data as { query?: { random?: unknown } }).query?.random;
-  return Array.isArray(random) && random.every(r => !!r && typeof r === 'object' && 'title' in (r as object));
-}
-
-interface ParseBlock { "*": string }
-interface ParseResponseShape { parse: { text: ParseBlock; images?: string[] } }
-
-function isParseResponseShape(data: unknown): data is ParseResponseShape {
-  if (!data || typeof data !== 'object') return false;
-  const text = (data as { parse?: { text?: { ['*']?: unknown } } }).parse?.text;
-  return typeof text?.['*'] === 'string';
-}
-
+type ParseText = string | { '*': string };
+interface ParseResponseShape { parse: { text: ParseText; images?: string[] } }
 interface ImageInfoItem { url: string; thumburl?: string }
 interface ImageInfoPage { title: string; imageinfo?: ImageInfoItem[] }
 interface ImageInfoResponse { query?: { pages?: Record<string, ImageInfoPage> } }
-function isImageInfoResponse(data: unknown): data is ImageInfoResponse {
-  return !!data && typeof data === 'object';
-}
 
-// Simple cache for page content to avoid duplicate API calls
+const isRandomQueryResponse = (d: unknown): d is RandomQueryResponse => {
+  if (!d || typeof d !== 'object') return false;
+  const random = (d as any).query?.random;
+  return Array.isArray(random) && random.every(r => r?.title);
+};
+
+const isParseResponseShape = (d: unknown): d is ParseResponseShape => {
+  if (!d || typeof d !== 'object') return false;
+  const text = (d as any).parse?.text;
+  return typeof text === 'string' || (text && typeof (text as any)['*'] === 'string');
+};
+
+const isImageInfoResponse = (d: unknown): d is ImageInfoResponse => !!d && typeof d === 'object';
+
+// Cache with LRU eviction
+const CACHE_VERSION = 12;
 const contentCache = new Map<string, string>();
-const MAX_CACHE_SIZE = 50;
-
-function addToCache(key: string, content: string) {
-  if (contentCache.size >= MAX_CACHE_SIZE) {
-    const firstKey = contentCache.keys().next().value;
-    if (firstKey) {
-      contentCache.delete(firstKey);
-    }
+const MAX_CACHE = 80;
+const cacheKey = (title: string) => `${CACHE_VERSION}:${title.toLowerCase().trim()}`;
+const putCache = (key: string, value: string) => {
+  if (contentCache.size >= MAX_CACHE) {
+    const first = contentCache.keys().next().value;
+    if (first) contentCache.delete(first);
   }
-  contentCache.set(key, content);
-}
+  contentCache.set(key, value);
+};
 
-// Get a random Wikipedia page (lightweight - just title and basic info)
-export async function getRandomPage(): Promise<WikipediaPage> {
-  const randomParams = new URLSearchParams({
-    action: "query",
-    format: "json",
-    list: "random",
-    rnnamespace: "0", // Main namespace only
-    rnlimit: "1",
-    origin: "*",
-  });
+export const clearWikipediaCache = () => contentCache.clear();
 
-  const randomResponse = await fetch(`${WIKIPEDIA_API_BASE}?${randomParams}`);
-  const randomJson: unknown = await randomResponse.json();
-  if (!isRandomQueryResponse(randomJson)) {
-    const apiErr = (randomJson as ApiError)?.error?.info;
-    throw new Error(apiErr ?? 'Unexpected random page response shape');
-  }
-  const randomTitle = randomJson.query.random[0]!.title;
-
-  // Return minimal page object - we'll get full content when needed
-  return {
-    pageid: 0, // We don't need the real pageid for the game
-    title: randomTitle,
-    extract: "",
-    fullurl: `https://en.wikipedia.org/wiki/${encodeURIComponent(randomTitle)}`,
-  };
-}
-
-
-// Get full page content with HTML for rendering
-export async function getPageContent(title: string, signal?: AbortSignal): Promise<string> {
-  // Check cache first
-  const cacheKey = title.toLowerCase().trim();
-  const cachedContent = contentCache.get(cacheKey);
-  if (cachedContent) {
-    return cachedContent;
-  }
-
+// Fetch Wikipedia parse data
+const fetchParse = async (title: string, signal?: AbortSignal, skin?: 'minerva'): Promise<ParseResponseShape> => {
   const params = new URLSearchParams({
-    action: "parse",
-    format: "json",
-    page: title,
-    prop: "text|images|sections",
-    disableeditsection: "false", // Keep edit sections for authentic look
-    disabletoc: "false", // Keep table of contents
-    mobileformat: "false", // Use desktop format for full content
-    origin: "*",
+    action: 'parse', format: 'json', formatversion: '2', page: title,
+    prop: 'text|images', disableeditsection: '1', redirects: 'true', origin: '*'
   });
+  if (skin) params.set('useskin', skin);
+  const resp = await fetch(`${WIKIPEDIA_API_BASE}?${params}`, { signal });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  const json: unknown = await resp.json();
+  if (!isParseResponseShape(json)) throw new Error('Unexpected parse response');
+  return json;
+};
 
-  const response = await fetch(`${WIKIPEDIA_API_BASE}?${params}` , { signal });
-
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: Failed to fetch page`);
-  }
-
-  const dataJson: unknown = await response.json();
-  const apiErr = (dataJson as ApiError)?.error?.info;
-  if (apiErr) {
-    throw new Error(apiErr);
-  }
-  if (!isParseResponseShape(dataJson)) {
-    throw new Error('Unexpected parse response shape');
-  }
-
-  let content = dataJson.parse.text['*'];
-
-  // Get image URLs if available
-  const images = dataJson.parse.images ?? [];
-  
-  // Minimal cleanup - only remove audio/video and enhance images
-  content = removeAudioVideo(content);
-  // Defer expensive image URL enhancement until after main content cleanup (progress perceived faster)
-  content = await enhanceImagesWithUrls(content, images, title, signal);
-  content = formatLinksOnly(content);
-  content = addWikipediaStyles(content);
-  
-  // Cache the processed content
-  addToCache(cacheKey, content);
-  
-  return content;
-}
-
-// Enhance images with proper URLs from Wikipedia API while preserving layout
-async function enhanceImagesWithUrls(content: string, imageList: string[], _pageTitle: string, signal?: AbortSignal): Promise<string> {
-  if (!imageList || imageList.length === 0) {
-    return content;
-  }
-
-  // Get image info for all images to ensure proper display
-  // Limit to first 20 images for speed; can be tuned
-  const imagesToProcess = imageList.slice(0, 20);
-  
-  try {
-    const imageParams = new URLSearchParams({
-      action: "query",
-      format: "json",
-      titles: imagesToProcess.join('|'),
-      prop: "imageinfo",
-      iiprop: "url|size",
-      iiurlwidth: "800",
-      origin: "*",
-    });
-
-  if (signal?.aborted) return content;
-  const imageResponse = await fetch(`${WIKIPEDIA_API_BASE}?${imageParams}`, { signal });
-    const imageJson: unknown = await imageResponse.json();
-    if (isImageInfoResponse(imageJson)) {
-      const pages = imageJson.query?.pages;
-      if (pages) {
-        const imageMap = new Map<string, ImageInfoItem>();
-        Object.values(pages).forEach((page) => {
-          const imageInfo = page.imageinfo?.[0];
-          if (imageInfo) {
-            const filename = page.title.replace('File:', '');
-            imageMap.set(filename, {
-              url: imageInfo.url,
-              thumburl: imageInfo.thumburl
-            });
-          }
-        });
-        imageMap.forEach(({ url, thumburl }, filename) => {
-          if (signal?.aborted) return; // stop processing if aborted
-          const escapedFilename = filename.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          const patterns = [
-            new RegExp(`src="[^"]*${escapedFilename}[^"]*"`, 'gi'),
-            new RegExp(`src="[^"]*File:${escapedFilename}[^"]*"`, 'gi'),
-            new RegExp(`src="/wiki/File:${escapedFilename}[^"]*"`, 'gi')
-          ];
-            patterns.forEach(pattern => {
-            content = content.replace(pattern, `src="${thumburl ?? url}"`);
-          });
-        });
-      }
-    }
-  } catch (error) {
-    console.warn('Failed to enhance images:', error);
-  }
-  
-  // Fix any remaining broken image references
-  content = content.replace(/src="\/wiki\/File:([^"]+)"/gi, (_match: string, filename: string) => {
-    return `src="https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(filename)}"`;
+export const getRandomPage = async (): Promise<WikipediaPage> => {
+  const params = new URLSearchParams({
+    action: 'query', format: 'json', list: 'random',
+    rnnamespace: '0', rnlimit: '1', origin: '*'
   });
-  
-  return content;
-}
+  const resp = await fetch(`${WIKIPEDIA_API_BASE}?${params}`);
+  const json: unknown = await resp.json();
+  if (!isRandomQueryResponse(json)) {
+    const apiErr = (json as ApiError)?.error?.info;
+    throw new Error(apiErr || 'Failed to get random page');
+  }
+  const title = json.query.random[0]!.title;
+  return {
+    pageid: 0, title, extract: '',
+    fullurl: `https://en.wikipedia.org/wiki/${encodeURIComponent(title)}`
+  };
+};
 
-// Remove only audio/video content and top notices - keep everything else exactly as Wikipedia shows it
-function removeAudioVideo(html: string): string {
-  let content = html;
-  
-  // Remove audio/video elements only
-  content = content.replace(/<audio[\s\S]*?<\/audio>/gi, '');
-  content = content.replace(/<video[\s\S]*?<\/video>/gi, '');
-  content = content.replace(/<iframe[\s\S]*?<\/iframe>/gi, '');
-  
-  // Remove Wikipedia notice boxes at the top (disambiguation, cleanup notices, etc.)
-  content = content.replace(/<table[^>]*class="[^"]*(?:ambox|dmbox|tmbox|cmbox|fmbox|imbox|ombox)[^"]*"[^>]*>[\s\S]*?<\/table>/gi, '');
-  content = content.replace(/<div[^>]*class="[^"]*(?:hatnote|dablink|rellink)[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-  // NOTE: We intentionally keep navboxes to preserve intra-article links used by Six Degrees paths.
-  // If we want to visually hide them while retaining links, we can do that via CSS on .navbox.
-  // content = content.replace(/<div[^>]*class="[^"]*navbox[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-  
-  // Remove "For other uses" and similar disambiguation notices
-  content = content.replace(/<div[^>]*class="[^"]*(?:noprint|plainlinks|hlist)[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-  
-  // Remove maintenance templates and notices (keep navbox-style navigation retained above)
-  content = content.replace(/<div[^>]*(?:role="note"|class="[^"]*(?:mbox-|notice)[^"]*")[^>]*>[\s\S]*?<\/div>/gi, '');
-  
-  // Keep External links section (needed for some SixDegrees paths)
-  // Tag the External links heading for optional CSS hiding
-  content = content.replace(/(<h2[^>]*>\s*<span[^>]*>\s*External links\s*<\/span>)/i, '<h2 class="ext-links" data-ext-links>External links');
-  
-  // Fix image URLs to use HTTPS
-  content = content.replace(/\/\/upload\.wikimedia\.org/g, 'https://upload.wikimedia.org');
-  content = content.replace(/src="\/\/upload\.wikimedia\.org/g, 'src="https://upload.wikimedia.org');
-  
-  return content;
-}
+const extractHtml = (parse: ParseResponseShape): string => {
+  const t = parse.parse.text;
+  return typeof t === 'string' ? t : t['*'];
+};
 
-// Format link destination according to game rules
-// (removed unused formatLink helper)
-
-// Format only the links to make them clickable for the game, preserve everything else
-function formatLinksOnly(html: string): string {
+// Optimized content sanitization
+const sanitizeContent = (html: string): { content: string; navboxes: string[] } => {
+  const navboxes = html.match(/<div[^>]*class="[^"]*navbox[^"]*"[\s\S]*?<\/div>/gi) || [];
+  
   const template = document.createElement('template');
   template.innerHTML = html;
-  const fragment = template.content;
-  // Remove scripts & inline event handlers
-  fragment.querySelectorAll('script').forEach(s => s.remove());
-  fragment.querySelectorAll('*').forEach(el => {
-    for (const attr of Array.from(el.attributes)) {
-      if (attr.name.startsWith('on')) {
-        el.removeAttribute(attr.name);
-      }
-      if (/mfTempOpenSection/i.test(attr.value)) {
-        el.removeAttribute(attr.name);
-      }
-    }
+  const doc = template.content;
+  
+  // Batch remove unwanted elements
+  const removeSelectors = [
+    'script', 'audio', 'video', 'iframe',
+    '.ambox', '.dmbox', '.tmbox', '.cmbox', '.fmbox', '.imbox', '.ombox',
+    '.hatnote', '.dablink', '.rellink',
+    '[role="note"]', '[class*="mbox-"]', '[class*="notice"]'
+  ];
+  removeSelectors.forEach(sel => {
+    doc.querySelectorAll(sel).forEach(el => el.remove());
   });
   
-  // Fix image sources to ensure they load properly
-  const images = fragment.querySelectorAll('img');
-  images.forEach(img => {
-    const src = img.getAttribute('src');
-    if (src) {
-      let newSrc = src;
-      
-      // Handle relative URLs
-      if (src.startsWith('//')) {
-        newSrc = 'https:' + src;
-      } else if (src.startsWith('/')) {
-        newSrc = 'https://en.wikipedia.org' + src;
+  // Clean attributes and fix images in single pass
+  doc.querySelectorAll('*').forEach(el => {
+    Array.from(el.attributes).forEach(attr => {
+      if (attr.name.startsWith('on') || /mfTempOpenSection/i.test(attr.value)) {
+        el.removeAttribute(attr.name);
       }
-      
-      img.setAttribute('src', newSrc);
-      img.setAttribute('loading', 'lazy');
-      img.setAttribute('decoding', 'async');
-    }
-  });
-  
-  // Process Wikipedia links only to make them clickable for the game
-  const links = fragment.querySelectorAll('a[href]');
-  
-  links.forEach(link => {
-    const href = link.getAttribute('href');
-    if (!href) return;
+    });
     
-    // Skip anchor links
+    if (el.tagName === 'IMG') {
+      const src = el.getAttribute('src');
+      if (src) {
+        let newSrc = src;
+        if (src.startsWith('//')) newSrc = 'https:' + src;
+        else if (src.startsWith('/')) newSrc = 'https://en.wikipedia.org' + src;
+        else if (!src.startsWith('http')) newSrc = 'https://upload.wikimedia.org' + src;
+        el.setAttribute('src', newSrc);
+        el.setAttribute('loading', 'lazy');
+        el.setAttribute('decoding', 'async');
+      }
+    }
+  });
+  
+  // Process links efficiently
+  doc.querySelectorAll('a[href]').forEach(link => {
+    const href = link.getAttribute('href') || '';
+    
     if (href.startsWith('#')) {
       link.removeAttribute('href');
-      (link as HTMLElement).style.color = 'inherit';
       (link as HTMLElement).style.textDecoration = 'none';
       return;
     }
     
-    // Detect internal Wikipedia article links (relative or absolute with any subdomains, incl. mobile)
-    let pageName: string | null = null;
-    if (href.startsWith('/wiki/')) {
-      pageName = href.substring(6);
-    } else {
-      const absMatch = href.match(/^https?:\/\/(?:[a-z0-9-]+\.)*wikipedia\.org\/wiki\/(.+)$/i)
-        || href.match(/^\/\/(?:[a-z0-9-]+\.)*wikipedia\.org\/wiki\/(.+)$/i);
-      if (absMatch) pageName = absMatch[1] ?? null;
-    }
-    if (pageName) {
-      const decodedName = decodeURIComponent(pageName);
-      
-      // Only allow main namespace articles and some specific namespaces
-      if (decodedName.includes(':')) {
-        // Allow only Portal and List_of_ pages
-        if (!decodedName.startsWith('Portal:') && !decodedName.startsWith('List_of_')) {
-          // Remove href for all other namespace pages
-          link.removeAttribute('href');
-          (link as HTMLElement).style.color = 'inherit';
-          (link as HTMLElement).style.textDecoration = 'none';
-          return;
-        }
+    const wikiMatch = href.match(/^(?:https?:\/\/(?:\w+\.)*wikipedia\.org)?\/wiki\/(.+)$/i) || 
+                     href.match(/^\/\/(?:\w+\.)*wikipedia\.org\/wiki\/(.+)$/i);
+    
+    if (wikiMatch?.[1]) {
+      const pageName = decodeURIComponent(wikiMatch[1]);
+      if (pageName.includes(':') && !pageName.startsWith('Portal:') && !pageName.startsWith('List_of_')) {
+        link.removeAttribute('href');
+        (link as HTMLElement).style.textDecoration = 'none';
+      } else {
+        link.setAttribute('href', '#');
+        link.setAttribute('data-wiki-page', pageName.replace(/_/g, ' '));
+        (link as HTMLElement).style.cursor = 'pointer';
       }
-      
-      // Make it a game-clickable Wikipedia link
-      const cleanPageName = decodedName.replace(/_/g, ' ');
-      link.setAttribute('href', '#');
-      link.setAttribute('data-wiki-page', cleanPageName);
-      (link as HTMLElement).style.color = '#0645ad';
-      (link as HTMLElement).style.textDecoration = 'underline';
-      (link as HTMLElement).style.cursor = 'pointer';
     } else {
-      // Remove all external links - make them non-clickable
       link.removeAttribute('href');
-      (link as HTMLElement).style.color = 'inherit';
       (link as HTMLElement).style.textDecoration = 'none';
     }
   });
   
-  return template.innerHTML;
-}
-
-// Add Wikipedia wrapper div - styles are now in globals.css
-function addWikipediaStyles(html: string): string {
-  
-  return `<div class="wikipedia-content">${html}</div>`;
-}
-
-// Progressive fetch: return fast initial HTML, enhance images asynchronously.
-export async function getPageContentProgressive(
-  title: string,
-  onEnhanced?: (html: string) => void,
-  signal?: AbortSignal
-): Promise<string> {
-  const cacheKey = title.toLowerCase().trim();
-  const cached = contentCache.get(cacheKey);
-  if (cached) return cached;
-
-  const params = new URLSearchParams({
-    action: "parse",
-    format: "json",
-    page: title,
-    prop: "text|images|sections",
-    disableeditsection: "false",
-    disabletoc: "false",
-    mobileformat: "false",
-    origin: "*",
+  // Expand collapsible content
+  ['.mw-collapsible', '.navbox', '.vertical-navbox'].forEach(sel => {
+    doc.querySelectorAll(sel).forEach(el => {
+      el.classList.remove('mw-collapsed', 'collapsed', 'autocollapse');
+      (el as HTMLElement).style.display = '';
+      el.querySelectorAll('.mw-collapsible-content').forEach(content => {
+        (content as HTMLElement).style.display = '';
+      });
+    });
   });
-  const response = await fetch(`${WIKIPEDIA_API_BASE}?${params}`, { signal });
-  if (!response.ok) throw new Error(`HTTP ${response.status}: Failed to fetch page`);
-  const dataJson: unknown = await response.json();
-  const apiErr = (dataJson as ApiError)?.error?.info;
-  if (apiErr) throw new Error(apiErr);
-  if (!isParseResponseShape(dataJson)) throw new Error('Unexpected parse response shape');
+  
+  // Replace toggle links and mark external sections
+  doc.querySelectorAll('a.mw-collapsible-text').forEach(toggle => {
+    const span = document.createElement('span');
+    span.className = 'navbox-toggle';
+    span.textContent = '(links)';
+    toggle.replaceWith(span);
+  });
+  
+  doc.querySelectorAll('h2').forEach(h2 => {
+    if (/external\s+links/i.test(h2.textContent || '')) {
+      h2.classList.add('ext-links');
+      h2.setAttribute('data-ext-links', '');
+    }
+  });
+  
+  return { content: template.innerHTML, navboxes };
+};
 
-  let initial = dataJson.parse.text['*'];
-  const images = dataJson.parse.images ?? [];
-  initial = removeAudioVideo(initial);
-  initial = formatLinksOnly(initial);
-  initial = addWikipediaStyles(initial);
-  addToCache(cacheKey, initial);
+const enhanceImages = async (html: string, imageNames: string[], signal?: AbortSignal): Promise<string> => {
+  if (!imageNames.length) return html;
+  const batch = imageNames.slice(0, 20);
+  try {
+    const params = new URLSearchParams({
+      action: 'query', format: 'json', titles: batch.join('|'), 
+      prop: 'imageinfo', iiprop: 'url|size', iiurlwidth: '800', origin: '*'
+    });
+    if (signal?.aborted) return html;
+    const resp = await fetch(`${WIKIPEDIA_API_BASE}?${params}`, { signal });
+    const json: unknown = await resp.json();
+    if (!isImageInfoResponse(json)) return html;
+    const pages = json.query?.pages;
+    if (!pages) return html;
+    
+    const imageMap = new Map<string, ImageInfoItem>();
+    Object.values(pages as Record<string, ImageInfoPage>).forEach(p => {
+      const ii = p.imageinfo?.[0];
+      if (ii) imageMap.set(p.title.replace('File:', ''), { url: ii.url, thumburl: ii.thumburl });
+    });
+    
+    imageMap.forEach(({ url, thumburl }, name) => {
+      const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const patterns = [
+        new RegExp(`src="[^"]*${esc}[^"]*"`, 'gi'),
+        new RegExp(`src="[^"]*File:${esc}[^"]*"`, 'gi'),
+        new RegExp(`src="/wiki/File:${esc}[^"]*"`, 'gi')
+      ];
+      patterns.forEach(r => { html = html.replace(r, `src="${thumburl || url}"`); });
+    });
+  } catch (e) { 
+    console.warn('Image enhancement failed', e); 
+  }
+  
+  return html.replace(/src="\/wiki\/File:([^"]+)"/gi, 
+    (_, f) => `src="https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(f)}"`);
+};
 
+export const getPageContent = async (title: string, signal?: AbortSignal): Promise<string> => {
+  const key = cacheKey(title);
+  const cached = contentCache.get(key);
+  if (cached) return cached;
+  
+  let parse: ParseResponseShape;
+  try { 
+    parse = await fetchParse(title, signal); 
+  } catch { 
+    parse = await fetchParse(title, signal, 'minerva'); 
+  }
+  
+  const rawHtml = extractHtml(parse);
+  const { content, navboxes } = sanitizeContent(rawHtml);
+  let html = await enhanceImages(content, parse.parse.images ?? [], signal);
+  
+  // Restore navboxes if lost
+  if (navboxes.length && !/class="navbox"/i.test(html)) {
+    html += `\n<div class="navboxes-fallback">${navboxes.join('\n')}</div>`;
+  }
+  
+  html = `<div class="wikipedia-content">${html}</div>`;
+  putCache(key, html);
+  return html;
+};
+
+export const getPageContentProgressive = async (
+  title: string, 
+  onEnhanced?: (html: string) => void, 
+  signal?: AbortSignal
+): Promise<string> => {
+  const key = cacheKey(title);
+  const cached = contentCache.get(key);
+  if (cached) return cached;
+  
+  let parse: ParseResponseShape;
+  try { 
+    parse = await fetchParse(title, signal); 
+  } catch { 
+    parse = await fetchParse(title, signal, 'minerva'); 
+  }
+  
+  const rawHtml = extractHtml(parse);
+  const { content, navboxes } = sanitizeContent(rawHtml);
+  
+  let initial = content;
+  if (navboxes.length && !/class="navbox"/i.test(initial)) {
+    initial += `\n<div class="navboxes-fallback">${navboxes.join('\n')}</div>`;
+  }
+  
+  initial = `<div class="wikipedia-content">${initial}</div>`;
+  putCache(key, initial);
+  
+  // Enhance images asynchronously
   void (async () => {
     try {
-      const upgraded = await enhanceImagesWithUrls(initial, images, title, signal);
-      addToCache(cacheKey, upgraded);
+      const upgraded = await enhanceImages(initial, parse.parse.images ?? [], signal);
+      putCache(key, upgraded);
       onEnhanced?.(upgraded);
     } catch { /* ignore */ }
   })();
-
+  
   return initial;
-}
+};
+
 
 
 

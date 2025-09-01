@@ -1,6 +1,6 @@
 "use client";
 
-import { signIn, signOut } from "next-auth/react";
+import { signIn, signOut, useSession } from "next-auth/react";
 import { Button } from "~/components/ui/button";
 import {
   DropdownMenu,
@@ -11,9 +11,8 @@ import {
 } from "~/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
 import { LogIn, LogOut, User } from "lucide-react";
-import { useSession } from "next-auth/react";
 
-export function AuthButton() {
+export const AuthButton = () => {
   const { data: session, status } = useSession();
   const isLoading = status === "loading";
   const isAuthenticated = status === "authenticated";
@@ -43,7 +42,7 @@ export function AuthButton() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+        <Button variant="ghost" className="relative h-8 w-8 rounded-full" title="Account menu">
           <Avatar className="h-8 w-8">
             <AvatarImage
               src={session?.user?.image ?? ""}
@@ -69,14 +68,11 @@ export function AuthButton() {
           </div>
         </div>
         <DropdownMenuSeparator />
-        <DropdownMenuItem
-          className="cursor-pointer"
-          onClick={() => signOut()}
-        >
+        <DropdownMenuItem className="cursor-pointer" onClick={() => signOut()}>
           <LogOut className="mr-2 h-4 w-4" />
           Sign Out
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
-}
+};

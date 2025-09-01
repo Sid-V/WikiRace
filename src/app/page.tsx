@@ -3,7 +3,7 @@
 import { AuthButton } from "~/components/auth-button";
 import { GameWrapper } from "~/components/game-wrapper";
 import { ModeToggle } from "~/components/mode-toggle";
-import { useSession } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
 import Image from "next/image";
 import { Card, CardContent } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
@@ -22,7 +22,19 @@ export default function HomePage() {
   }
 
   if (isAuthenticated) {
-    return <GameWrapper />;
+    return (
+      <div className="min-h-screen flex flex-col">
+        <header className="w-full flex items-center justify-between px-4 py-2 border-b">
+          <h1 className="text-xl font-semibold">Wiki Race</h1>
+          <Button variant="outline" size="sm" onClick={() => signOut()}>
+            Sign Out
+          </Button>
+        </header>
+        <div className="flex-1">
+          <GameWrapper />
+        </div>
+      </div>
+    );
   }
 
   return (

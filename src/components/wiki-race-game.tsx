@@ -4,17 +4,31 @@ import React, { useState, useEffect, useCallback, useRef, memo } from "react";
 import Image from "next/image";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { Clock, Target, Play, RotateCcw, ExternalLink, ArrowLeft } from "lucide-react";
+import { Clock, Target, Play, RotateCcw, ExternalLink, ArrowLeft, Home } from "lucide-react";
 import { AuthButton } from "./auth-button";
 import { ModeToggle } from "./mode-toggle";
 import { GameTimer } from "./game-timer";
+import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel } from "~/components/ui/alert-dialog";
 import { 
   getRandomPage, 
   getPageContent, 
   getPageContentProgressive,
-  type WikipediaPage,
-  type GameSession 
+  type WikipediaPage
 } from "~/lib/wikipedia";
+
+// Local game session type
+interface GameSession {
+  id: string;
+  startPage: WikipediaPage;
+  endPage: WikipediaPage;
+  currentPage: WikipediaPage;
+  path: WikipediaPage[];
+  startTime: number;
+  endTime?: number;
+  completed: boolean;
+  solutionPath?: string[];
+  solutionDistance?: number;
+}
 import { chooseValidatedStartAndEndConcurrent } from "~/lib/six-degrees";
 
 // No external props now; game lifecycle managed internally
@@ -55,7 +69,7 @@ const WikiContent = memo(({ content, onLinkClick }: {
 WikiContent.displayName = 'WikiContent';
 
 // Memoized sidebar component
-const GameSidebar = memo(({ gameSession, startTime, isRunning, onNewGame, showNewGame, onPreviousPage, canGoBack }: { 
+const GameSidebar = memo(({ gameSession, startTime, isRunning, onNewGame, showNewGame, onPreviousPage, canGoBack, onLeaveGame }: { 
   gameSession: GameSession;
   startTime: number;
   isRunning: boolean;
@@ -63,8 +77,9 @@ const GameSidebar = memo(({ gameSession, startTime, isRunning, onNewGame, showNe
   showNewGame: boolean;
   onPreviousPage: () => void;
   canGoBack: boolean;
+  onLeaveGame: () => void;
 }) => (
-  <div className="w-80 bg-card border-r border-border sticky top-0 h-screen overflow-hidden flex flex-col">
+  <div className="w-80 bg-card border-r border-border sticky top-0 h-screen flex flex-col">
     <div className="p-6 border-b border-border">
       <Card>
         <CardHeader className="pb-4">
@@ -116,9 +131,9 @@ const GameSidebar = memo(({ gameSession, startTime, isRunning, onNewGame, showNe
       </Card>
     </div>
     
-    <div className="flex-1 overflow-hidden flex flex-col">
+    <div className="flex-1 flex flex-col min-h-0">
       {/* Previous page button (above Path Tracker) */}
-      <div className="px-6 pt-4 pb-2 border-b border-border">
+      <div className="px-6 pt-4 pb-2 border-b border-border flex-shrink-0">
         <Button 
           onClick={onPreviousPage}
           variant="secondary"
@@ -130,53 +145,81 @@ const GameSidebar = memo(({ gameSession, startTime, isRunning, onNewGame, showNe
           <span className="text-sm font-medium">Previous Wiki page</span>
         </Button>
       </div>
-      <Card className="h-full rounded-none border-0">
-        <CardHeader className="pb-4">
-          <CardTitle className="text-lg">Path Tracker</CardTitle>
-        </CardHeader>
-        <CardContent className="h-full pb-0">
-          <div className="sidebar-scroll h-full overflow-y-auto pr-2">
-            <div className="space-y-2">
-              {gameSession.path.map((page, index) => (
-                <div
-                  key={`${page.title}-${index}`}
-                  className={`p-3 rounded-lg border text-sm transition-colors ${
-                    index === 0
-                      ? 'bg-green-50 border-green-200 text-green-800'
-                      : index === gameSession.path.length - 1
-                      ? 'bg-blue-50 border-blue-200 text-blue-800'
-                      : 'bg-gray-50 border-gray-200 text-gray-700'
-                  } hover:shadow-sm`}
-                >
-                  <div className="flex items-start gap-3">
-                    <span className="w-6 h-6 rounded-full bg-background border border-current flex items-center justify-center text-xs font-medium flex-shrink-0 mt-0.5">
-                      {index + 1}
-                    </span>
-                    <span className="line-clamp-2 break-words">{page.title}</span>
-                  </div>
+      
+      <div className="flex-1 flex flex-col min-h-0 px-6">
+        <div className="pt-4 pb-2 flex-shrink-0">
+          <h3 className="text-lg font-semibold">Path Tracker</h3>
+        </div>
+        <div className="flex-1 overflow-y-auto pr-2 pb-4">
+          <div className="space-y-2">
+            {gameSession.path.map((page: WikipediaPage, index: number) => (
+              <div
+                key={`${page.title}-${index}`}
+                className={`p-3 rounded-lg border text-sm transition-colors ${
+                  index === 0
+                    ? 'bg-green-50 border-green-200 text-green-800'
+                    : index === gameSession.path.length - 1
+                    ? 'bg-blue-50 border-blue-200 text-blue-800'
+                    : 'bg-gray-50 border-gray-200 text-gray-700'
+                } hover:shadow-sm`}
+              >
+                <div className="flex items-start gap-3">
+                  <span className="w-6 h-6 rounded-full bg-background border border-current flex items-center justify-center text-xs font-medium flex-shrink-0 mt-0.5">
+                    {index + 1}
+                  </span>
+                  <span className="line-clamp-2 break-words">{page.title}</span>
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
 
     {/* Bottom controls */}
-    <div className="p-4 border-t border-border flex flex-col gap-3">
-      {showNewGame && (
-        <Button 
-          onClick={onNewGame} 
-          variant="outline" 
-          size="sm" 
-          className="gap-2 w-full max-w-[160px] justify-start px-3"
-        >
-          <RotateCcw className="h-4 w-4" />
-          <span className="text-sm font-medium">New Game</span>
-        </Button>
-      )}
+    <div className="p-4 border-t border-border flex flex-col gap-3 flex-shrink-0">
+      <div className="flex items-center gap-2">
+        {showNewGame && (
+          <Button 
+            onClick={onNewGame} 
+            variant="outline" 
+            size="sm" 
+            className="gap-2 flex-1 justify-start px-3"
+          >
+            <RotateCcw className="h-4 w-4" />
+            <span className="text-sm font-medium">New Game</span>
+          </Button>
+        )}
+        {isRunning && (
+          <Button 
+            onClick={onLeaveGame} 
+            variant="destructive" 
+            size="sm" 
+            className="gap-2 flex-1 justify-start px-3"
+          >
+            <Home className="h-4 w-4" />
+            <span className="text-sm font-medium">Leave Game</span>
+          </Button>
+        )}
+      </div>
       <div className="flex items-center gap-3">
         <ModeToggle />
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="secondary" size="sm" className="flex-1">Stats</Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Your Stats</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <StatsContent />
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Close</AlertDialogCancel>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
         {/* Enlarged avatar button */}
         <div className="scale-110">
           <AuthButton />
@@ -185,8 +228,45 @@ const GameSidebar = memo(({ gameSession, startTime, isRunning, onNewGame, showNe
     </div>
   </div>
 ));
+// Fetch stats inside dialog
+const StatsContent: React.FC = () => {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [data, setData] = useState<{ gamesPlayed: number; fastestDurationSeconds: number | null; averageDurationSeconds: number | null } | null>(null);
+  useEffect(() => {
+    let active = true;
+    const run = async () => {
+      try {
+        const res = await fetch('/api/stats');
+        if (!res.ok) throw new Error('Failed to load');
+        const json = await res.json();
+        if (active) setData(json);
+      } catch (e) {
+        if (active) setError('Error loading stats');
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    run();
+    return () => { active = false; };
+  }, []);
+  if (loading) return <div className="text-sm">Loading...</div>;
+  if (error) return <div className="text-sm text-red-500">{error}</div>;
+  if (!data) return <div className="text-sm">No stats yet.</div>;
+  const fmt = (s: number | null) => s == null ? '-' : `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`;
+  return (
+    <div className="text-sm space-y-2">
+      <div className="flex justify-between"><span>Games Played</span><span>{data.gamesPlayed}</span></div>
+      <div className="flex justify-between"><span>Fastest</span><span>{fmt(data.fastestDurationSeconds)}</span></div>
+      <div className="flex justify-between"><span>Average</span><span>{fmt(data.averageDurationSeconds)}</span></div>
+    </div>
+  );
+};
 
 GameSidebar.displayName = 'GameSidebar';
+
+interface BackendGameStartResponse { gameId: string }
+interface BackendFinishResponse { durationSeconds: number; fastestDurationSeconds: number | null; averageDurationSeconds: number | null; gamesPlayed: number }
 
 export function WikiRaceGame() {
   const [gameSession, setGameSession] = useState<GameSession | null>(null);
@@ -273,22 +353,30 @@ export function WikiRaceGame() {
     setError(null);
     setCurrentPageContent("");
     currentPageRef.current = "";
-    // Reset cache for a fresh session
     contentCacheRef.current = new Map();
-  // If a game is currently active, clear it so the global loading spinner view appears
-  setGameSession(null);
-    
+    setGameSession(null);
+
     try {
+      // Ask backend to create game row early (placeholder start/end overwritten later)
+      let backendGameId: string | undefined;
+      try {
+        const res = await fetch('/api/game/start', { method: 'POST' });
+        if (res.ok) {
+          const data: BackendGameStartResponse = await res.json();
+            backendGameId = data.gameId;
+        }
+      } catch {/* ignore start failure; can still play local */}
+
       const result = await chooseValidatedStartAndEndConcurrent<WikipediaPage>(
         () => getRandomPage(),
         () => getRandomPage(),
         (title) => getPageContent(title),
-        { maxDegrees: 10, endAttemptsPerStart: 2 }
+        { maxDegrees: 4, endAttemptsPerStart: 2 }
       );
       const { startPageData, endPage, path: solutionPath, degrees } = result;
 
       const newSession: GameSession = {
-        id: Math.random().toString(36).substring(7),
+        id: backendGameId || Math.random().toString(36).substring(7),
         startPage: startPageData.page,
         endPage: endPage as WikipediaPage,
         currentPage: startPageData.page,
@@ -299,10 +387,10 @@ export function WikiRaceGame() {
         solutionDistance: degrees,
       };
 
-  currentPageRef.current = startPageData.page.title;
-  setCurrentPageContent(startPageData.content);
-  contentCacheRef.current.set(startPageData.page.title, startPageData.content);
-  setGameSession(newSession);
+      currentPageRef.current = startPageData.page.title;
+      setCurrentPageContent(startPageData.content);
+      contentCacheRef.current.set(startPageData.page.title, startPageData.content);
+      setGameSession(newSession);
 
       // Dev-only diagnostic logging (hidden in production)
       if (process.env.NODE_ENV !== 'production') {
@@ -342,7 +430,7 @@ export function WikiRaceGame() {
 
           const isCompleted = pageTitle === gameSession.endPage.title;
 
-            setGameSession(prevSession => {
+            setGameSession((prevSession: GameSession | null) => {
             if (!prevSession) return null;
             return {
               ...prevSession,
@@ -374,7 +462,7 @@ export function WikiRaceGame() {
   // Navigate back to the previous page (append previous page again to the path)
   const goToPreviousPage = useCallback(async () => {
     let prevPageTitle: string | null = null;
-    setGameSession(prev => {
+  setGameSession((prev: GameSession | null) => {
       if (!prev || prev.completed || prev.path.length < 2) return prev;
       const newPath = prev.path.slice(0, -1); // remove last page
       const newCurrent = newPath[newPath.length - 1];
@@ -397,9 +485,50 @@ export function WikiRaceGame() {
     }
   }, [loadPageContent]);
 
+  // Leave game and return to homepage
+  const leaveGame = useCallback(async () => {
+    if (!gameSession || gameSession.completed) return;
+
+    try {
+      // Mark game as abandoned in the backend
+      await fetch('/api/game/abandon', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gameId: gameSession.id })
+      });
+    } catch (error) {
+      console.warn('Failed to mark game as abandoned:', error);
+      // Continue with leaving the game even if the API call fails
+    }
+
+    // Reset the game state to return to homepage
+    setGameSession(null);
+    setCurrentPageContent("");
+    setError(null);
+    currentPageRef.current = "";
+    contentCacheRef.current.clear();
+  }, [gameSession]);
+
   // Game completion handler
   // Effect placeholder for future side-effects when game completes
   useEffect(() => { /* no-op: previously notified parent */ }, [gameSession?.completed]);
+
+  useEffect(() => {
+    // when game completes send finish event
+    const sendFinish = async () => {
+      if (!gameSession?.completed || !gameSession.endTime) return;
+      try {
+        const payload = {
+          gameId: gameSession.id,
+          startPage: gameSession.startPage.title,
+          endPage: gameSession.endPage.title,
+          clicks: gameSession.path.length - 1,
+        };
+        await fetch('/api/game/finish', { method: 'POST', body: JSON.stringify(payload) });
+      } catch {/* ignore */}
+    };
+    void sendFinish();
+  }, [gameSession?.completed, gameSession?.endTime]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -547,8 +676,9 @@ export function WikiRaceGame() {
         isRunning={!gameSession.completed}
         onNewGame={startNewGame}
         showNewGame={!gameSession.completed}
-  onPreviousPage={goToPreviousPage}
-  canGoBack={gameSession.path.length > 1}
+        onPreviousPage={goToPreviousPage}
+        canGoBack={gameSession.path.length > 1}
+        onLeaveGame={leaveGame}
       />
       
       <div className="flex-1 flex flex-col">

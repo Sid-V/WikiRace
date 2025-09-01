@@ -8,7 +8,13 @@ interface TimerProps {
   endTime?: number;
 }
 
-export function GameTimer({ startTime, isRunning, endTime }: TimerProps) {
+export const formatTime = (milliseconds: number) => {
+  const seconds = Math.floor(milliseconds / 1000);
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}:${(seconds % 60).toString().padStart(2, "0")}`;
+};
+
+export const GameTimer = ({ startTime, isRunning, endTime }: TimerProps) => {
   const [elapsed, setElapsed] = useState<number>(0);
 
   useEffect(() => {
@@ -26,22 +32,9 @@ export function GameTimer({ startTime, isRunning, endTime }: TimerProps) {
     return () => clearInterval(interval);
   }, [startTime, isRunning, endTime]);
 
-  const formatTime = (milliseconds: number) => {
-    const seconds = Math.floor(milliseconds / 1000);
-    const minutes = Math.floor(seconds / 60);
-    return `${minutes}:${(seconds % 60).toString().padStart(2, "0")}`;
-  };
-
   return (
     <div className="flex items-center gap-2">
       <span className="text-lg font-mono">{formatTime(elapsed)}</span>
     </div>
   );
-}
-
-// Utility function for formatting time in other components
-export const formatTime = (milliseconds: number) => {
-  const seconds = Math.floor(milliseconds / 1000);
-  const minutes = Math.floor(seconds / 60);
-  return `${minutes}:${(seconds % 60).toString().padStart(2, "0")}`;
 };
