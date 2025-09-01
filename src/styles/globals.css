@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "./wikipedia-content.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -118,215 +119,44 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    /* Performance optimization */
+    box-sizing: border-box;
   }
+  
   body {
     @apply bg-background text-foreground;
+    /* Prevent layout shifts */
+    min-height: 100vh;
+    /* Optimize rendering */
+    text-rendering: optimizeSpeed;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  /* Performance critical utility classes */
+  .gpu-accelerated {
+    transform: translateZ(0);
+    will-change: transform;
+  }
+  
+  .contain-layout {
+    contain: layout style paint;
+  }
+  
+  .content-visibility-auto {
+    content-visibility: auto;
+    contain-intrinsic-size: 500px;
   }
 }
 
-/* Wikipedia content styles - dark mode only */
-.wikipedia-content {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
-  font-size: 18px !important;
-  line-height: 1.6 !important;
-  background-color: transparent !important;
-  color: #e8e6e3 !important;
+/* Reduced motion for better performance */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
-
-/* Force dark mode text colors */
-.wikipedia-content,
-.wikipedia-content *:not(a) {
-  color: #e8e6e3 !important;
-}
-
-/* Headings */
-.wikipedia-content h1, 
-.wikipedia-content h2, 
-.wikipedia-content h3 {
-  font-family: 'Linux Libertine', 'Georgia', 'Times', serif !important;
-  font-weight: normal !important;
-  margin: 0.5em 0 !important;
-  padding-bottom: 0.25em !important;
-  color: #e8e6e3 !important;
-  border-bottom: 1px solid #404040 !important;
-}
-
-.wikipedia-content h1 { font-size: 2.8em !important; }
-.wikipedia-content h2 { font-size: 2.2em !important; }
-.wikipedia-content h3 { font-size: 1.7em !important; }
-
-/* Paragraphs */
-.wikipedia-content p {
-  margin: 0.5em 0 !important;
-  color: #e8e6e3 !important;
-}
-
-/* Links - dark mode blue */
-.wikipedia-content a {
-  color: #58a6ff !important;
-  text-decoration: none !important;
-}
-
-.wikipedia-content a:hover {
-  color: #79c0ff !important;
-  text-decoration: underline !important;
-}
-
-/* Images */
-.wikipedia-content img {
-  max-width: 100% !important;
-  height: auto !important;
-}
-
-/* --------------------------------------------- */
-/* Wikipedia table clarity improvements (dark)    */
-/* --------------------------------------------- */
-.wikipedia-content table {
-  border-collapse: collapse !important;
-  margin: 1.25em 0 !important;
-  font-size: 0.95em !important;
-  line-height: 1.4 !important;
-  background: transparent !important;
-  width: auto !important;
-}
-
-.wikipedia-content table caption {
-  caption-side: top !important;
-  padding: 0 0 0.5em !important;
-  font-weight: 600 !important;
-  color: #d0d6dc !important;
-}
-
-.wikipedia-content table th,
-.wikipedia-content table td {
-  border: 1px solid #30363d !important;
-  padding: 6px 10px !important;
-  vertical-align: top !important;
-  background-clip: padding-box !important;
-}
-
-.wikipedia-content table th {
-  background: #242830 !important;
-  font-weight: 600 !important;
-  color: #f0f3f5 !important;
-  text-align: left !important;
-  white-space: nowrap !important;
-}
-
-/* Zebra striping for readability */
-.wikipedia-content table tr:nth-child(even) td {
-  background: #161a20 !important;
-}
-.wikipedia-content table tr:nth-child(odd) td {
-  background: #12161c !important;
-}
-
-/* Row hover highlight */
-.wikipedia-content table tr:hover td {
-  background: #1d232b !important;
-}
-
-/* Improve contrast inside light highlight cells (e.g. qualification rows) */
-.wikipedia-content td[style*="background:#cfc"],
-.wikipedia-content th[style*="background:#cfc"],
-.wikipedia-content td[style*="background: #cfc"],
-.wikipedia-content th[style*="background: #cfc"],
-.wikipedia-content td[style*="background:#ccffcc"],
-.wikipedia-content th[style*="background:#ccffcc"],
-.wikipedia-content td[style*="background: #ccffcc"],
-.wikipedia-content th[style*="background: #ccffcc"] {
-  color: #0d1117 !important; /* dark text for light green cells */
-}
-
-/* Key legend cells often very light */
-.wikipedia-content table td[style*="#cfc"] small,
-.wikipedia-content table td[style*="#ccffcc"] small {
-  color: #111 !important;
-}
-
-/* Prevent universal color override from forcing low-contrast text in any cell with explicit light background */
-.wikipedia-content td[style*="background:#f"],
-.wikipedia-content th[style*="background:#f"],
-.wikipedia-content td[style*="background: #f"],
-.wikipedia-content th[style*="background: #f"] {
-  color: #111 !important;
-}
-
-/* Compact tables (e.g. schedule/results) */
-.wikipedia-content .wikitable { 
-  width: 100% !important; 
-  background: transparent !important; 
-}
-.wikipedia-content .wikitable > * > tr > th,
-.wikipedia-content .wikitable > * > tr > td { 
-  border: 1px solid #30363d !important; 
-}
-
-/* Make small annotation text slightly dimmer but readable */
-.wikipedia-content table small {
-  font-size: 0.85em !important;
-  opacity: 0.85 !important;
-}
-
-/* Ensure links in headers maintain color */
-.wikipedia-content table th a { color: #58a6ff !important; }
-
-/* --------------------------------------------- */
-/* Wikipedia navbox styling fixes               */
-/* --------------------------------------------- */
-.wikipedia-content .navbox,
-.wikipedia-content .navbox-subgroup,
-.wikipedia-content .navbox-inner,
-.wikipedia-content .navbox-list,
-.wikipedia-content .vertical-navbox {
-  background: #242830 !important;
-  border: 1px solid #30363d !important;
-  box-shadow: none !important;
-}
-
-.wikipedia-content .navbox table,
-.wikipedia-content .navbox-subgroup table,
-.wikipedia-content .vertical-navbox table {
-  background: transparent !important;
-  border: none !important;
-  margin: 0 !important;
-}
-
-.wikipedia-content .navbox th,
-.wikipedia-content .navbox-title,
-.wikipedia-content .navbox-abovebelow,
-.wikipedia-content .navbox-group {
-  background: #1c2026 !important;
-  border: 1px solid #30363d !important;
-  color: #f0f3f5 !important;
-}
-
-.wikipedia-content .navbox td,
-.wikipedia-content .navbox-list td {
-  background: #242830 !important;
-  border: 1px solid #30363d !important;
-  color: #e8e6e3 !important;
-}
-
-.wikipedia-content .navbox a {
-  color: #58a6ff !important;
-}
-
-.wikipedia-content .navbox a:hover {
-  color: #79c0ff !important;
-}
-
-/* Fix any remaining white borders in navboxes */
-.wikipedia-content .navbox *,
-.wikipedia-content .vertical-navbox *,
-.wikipedia-content .navbox-subgroup * {
-  border-color: #30363d !important;
-}
-
-/* Navbox toggle buttons */
-.wikipedia-content .navbox-toggle {
-  color: #8b949e !important;
-  font-size: 0.85em !important;
-}
-
-

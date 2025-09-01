@@ -1,7 +1,7 @@
 "use client";
 
 import { AuthButton } from "~/components/auth-button";
-import { GameWrapper } from "~/components/game-wrapper";
+import { WikiRaceGame } from "~/components/wiki-race-game";
 import { ModeToggle } from "~/components/mode-toggle";
 import { useSession, signOut } from "next-auth/react";
 import Image from "next/image";
@@ -31,7 +31,7 @@ export default function HomePage() {
           </Button>
         </header>
         <div className="flex-1">
-          <GameWrapper />
+          <WikiRaceGame />
         </div>
       </div>
     );

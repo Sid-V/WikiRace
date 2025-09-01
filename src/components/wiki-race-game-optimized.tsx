@@ -6,7 +6,7 @@ import { getRandomPage, getPageContent, type WikipediaPage } from "~/lib/wikiped
 import { chooseValidatedStartAndEndConcurrent } from "~/lib/six-degrees";
 import type { GameSession } from "~/contexts/game-context";
 
-// Lazy loaded components
+// Lazy load components for better performance
 const GameSidebar = lazy(() => import("./game-sidebar").then(m => ({ default: m.GameSidebar })));
 const GameContent = lazy(() => import("./game-content").then(m => ({ default: m.GameContent })));
 const GameHeader = lazy(() => import("./game-content").then(m => ({ default: m.GameHeader })));
@@ -71,7 +71,7 @@ function useGameLogic() {
     }
   }, [actions]);
 
-  // Send completion data to server when game ends
+  // Game completion effect
   useEffect(() => {
     const sendFinish = async () => {
       if (!gameSession?.completed || !gameSession.endTime) return;
@@ -97,7 +97,7 @@ function useGameLogic() {
   };
 }
 
-// Main game container
+// Game container component
 function GameContainer() {
   const gameSession = useGameSession();
   const { isLoading } = useUIState();
@@ -149,7 +149,7 @@ function GameContainer() {
   );
 }
 
-// Main game component with context provider
+// Main component with provider
 export function WikiRaceGame() {
   return (
     <GameProvider>

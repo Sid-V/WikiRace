@@ -1,0 +1,378 @@
+/* Optimized Wikipedia content styles - performance focused */
+
+/* Optimized scroll container for better performance */
+.wiki-scroll-container {
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scroll-behavior: auto;
+  /* Performance optimizations */
+  contain: layout style paint;
+  transform: translateZ(0);
+  will-change: scroll-position;
+  /* Enable hardware acceleration */
+  -webkit-overflow-scrolling: touch;
+  /* Smooth scrolling on iOS */
+  scrollbar-width: thin;
+  scrollbar-color: #30363d #161b22;
+}
+
+/* Custom scrollbar for better aesthetics */
+.wiki-scroll-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.wiki-scroll-container::-webkit-scrollbar-track {
+  background: #161b22;
+}
+
+.wiki-scroll-container::-webkit-scrollbar-thumb {
+  background: #30363d;
+  border-radius: 4px;
+}
+
+.wiki-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: #484f58;
+}
+
+.wikipedia-content {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-size: 18px;
+  line-height: 1.6;
+  background-color: transparent;
+  color: #e8e6e3;
+  /* Performance optimizations */
+  contain: layout style paint;
+  content-visibility: auto;
+  contain-intrinsic-size: 1000px;
+  will-change: auto;
+  transform: translateZ(0);
+}
+
+/* Simplified heading styles */
+.wikipedia-content h1,
+.wikipedia-content h2,
+.wikipedia-content h3 {
+  font-family: 'Linux Libertine', 'Georgia', 'Times', serif;
+  font-weight: normal;
+  margin: 0.5em 0;
+  padding-bottom: 0.25em;
+  color: #e8e6e3;
+  border-bottom: 1px solid #404040;
+}
+
+.wikipedia-content h1 { font-size: 2.8em; }
+.wikipedia-content h2 { font-size: 2.2em; }
+.wikipedia-content h3 { font-size: 1.7em; }
+
+/* Paragraph and link styles */
+.wikipedia-content p { margin: 0.5em 0; }
+
+.wikipedia-content a {
+  color: #58a6ff;
+  text-decoration: none;
+}
+
+.wikipedia-content a:hover {
+  color: #79c0ff;
+  text-decoration: underline;
+}
+
+/* Optimized image styles */
+.wikipedia-content img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Simplified table styles */
+.wikipedia-content table {
+  border-collapse: collapse;
+  margin: 1.25em 0;
+  font-size: 0.95em;
+  background: #242830 !important;
+  width: auto;
+  color: #e8e6e3 !important;
+}
+
+.wikipedia-content th,
+.wikipedia-content td {
+  border: 1px solid #30363d !important;
+  padding: 6px 10px;
+  vertical-align: top;
+  background: inherit !important;
+  color: inherit !important;
+}
+
+.wikipedia-content th {
+  background: #1c2026 !important;
+  font-weight: 600;
+  color: #f0f3f5 !important;
+}
+
+/* Zebra striping */
+.wikipedia-content tr:nth-child(even) td { 
+  background: #1f2328 !important; 
+  color: #e8e6e3 !important;
+}
+.wikipedia-content tr:nth-child(odd) td { 
+  background: #242830 !important; 
+  color: #e8e6e3 !important;
+}
+
+/* Table headers in different contexts */
+.wikipedia-content .wikitable th,
+.wikipedia-content .sortable th,
+.wikipedia-content .jquery-tablesorter th {
+  background: #1c2026 !important;
+  color: #f0f6fc !important;
+  border: 1px solid #30363d !important;
+}
+
+.wikipedia-content .wikitable,
+.wikipedia-content .sortable,
+.wikipedia-content .jquery-tablesorter {
+  background: #242830 !important;
+  border: 1px solid #30363d !important;
+  color: #e8e6e3 !important;
+}
+
+.wikipedia-content .wikitable td,
+.wikipedia-content .sortable td,
+.wikipedia-content .jquery-tablesorter td {
+  background: #242830 !important;
+  color: #e8e6e3 !important;
+  border: 1px solid #30363d !important;
+}
+
+/* Ensure links in tables are visible */
+.wikipedia-content table a {
+  color: #58a6ff !important;
+}
+
+.wikipedia-content table a:hover {
+  color: #79c0ff !important;
+}
+
+/* Optimized navbox styles */
+.wikipedia-content .navbox,
+.wikipedia-content .navbox-subgroup {
+  background: #242830 !important;
+  border: 1px solid #30363d !important;
+  margin: 1em 0;
+  color: #e8e6e3 !important;
+}
+
+.wikipedia-content .navbox th,
+.wikipedia-content .navbox-title {
+  background: #1c2026 !important;
+  color: #f0f3f5 !important;
+}
+
+.wikipedia-content .navbox td {
+  background: #242830 !important;
+  color: #e8e6e3 !important;
+  border: 1px solid #30363d !important;
+}
+
+.wikipedia-content .navbox a {
+  color: #58a6ff !important;
+}
+
+.wikipedia-content .navbox a:hover {
+  color: #79c0ff !important;
+}
+
+/* Infobox styles for dark mode */
+.wikipedia-content .infobox,
+.wikipedia-content .infobox-subbox {
+  background: #242830 !important;
+  border: 1px solid #30363d !important;
+  color: #e8e6e3 !important;
+}
+
+.wikipedia-content .infobox th,
+.wikipedia-content .infobox-title,
+.wikipedia-content .infobox-header {
+  background: #1c2026 !important;
+  color: #f0f3f5 !important;
+  border: 1px solid #30363d !important;
+}
+
+.wikipedia-content .infobox td {
+  background: #242830 !important;
+  color: #e8e6e3 !important;
+  border: 1px solid #30363d !important;
+}
+
+.wikipedia-content .infobox a {
+  color: #58a6ff !important;
+}
+
+.wikipedia-content .infobox a:hover {
+  color: #79c0ff !important;
+}
+
+/* Authority control and metadata boxes */
+.wikipedia-content .metadata,
+.wikipedia-content .authority-control {
+  background: #1c2026 !important;
+  border: 1px solid #30363d !important;
+  color: #c9d1d9 !important;
+}
+
+.wikipedia-content .metadata th,
+.wikipedia-content .authority-control th {
+  background: #161b22 !important;
+  color: #f0f6fc !important;
+}
+
+.wikipedia-content .metadata td,
+.wikipedia-content .authority-control td {
+  background: #1c2026 !important;
+  color: #c9d1d9 !important;
+}
+
+.wikipedia-content .metadata a,
+.wikipedia-content .authority-control a {
+  color: #58a6ff !important;
+}
+
+/* Template boxes and other content containers */
+.wikipedia-content .mbox,
+.wikipedia-content .ambox,
+.wikipedia-content .tmbox {
+  background: #242830 !important;
+  border: 1px solid #30363d !important;
+  color: #e8e6e3 !important;
+}
+
+.wikipedia-content .mbox-text,
+.wikipedia-content .ambox-text,
+.wikipedia-content .tmbox-text {
+  color: #e8e6e3 !important;
+}
+
+/* Quotations and blockquotes */
+.wikipedia-content blockquote,
+.wikipedia-content .quotebox {
+  background: #1c2026 !important;
+  border-left: 4px solid #30363d !important;
+  color: #c9d1d9 !important;
+}
+
+/* Caption styles */
+.wikipedia-content .thumbcaption,
+.wikipedia-content .caption {
+  background: #1c2026 !important;
+  color: #c9d1d9 !important;
+}
+
+/* References section */
+.wikipedia-content .reflist,
+.wikipedia-content .references {
+  background: transparent !important;
+  color: #c9d1d9 !important;
+}
+
+.wikipedia-content .reference a {
+  color: #58a6ff !important;
+}
+
+/* Additional Wikipedia-specific dark mode overrides */
+.wikipedia-content .sidebar,
+.wikipedia-content .sidebar-content {
+  background: #242830 !important;
+  border: 1px solid #30363d !important;
+  color: #e8e6e3 !important;
+}
+
+.wikipedia-content .sidebar th,
+.wikipedia-content .sidebar-title {
+  background: #1c2026 !important;
+  color: #f0f6fc !important;
+}
+
+/* Geography/Location infoboxes */
+.wikipedia-content .geography,
+.wikipedia-content .vcard {
+  background: #242830 !important;
+  border: 1px solid #30363d !important;
+  color: #e8e6e3 !important;
+}
+
+/* Ensure all possible table variants are covered */
+.wikipedia-content table[style*="background"],
+.wikipedia-content tr[style*="background"],
+.wikipedia-content td[style*="background"],
+.wikipedia-content th[style*="background"] {
+  background: #242830 !important;
+  color: #e8e6e3 !important;
+}
+
+/* Force dark backgrounds on stubborn elements */
+.wikipedia-content [style*="background-color: white"],
+.wikipedia-content [style*="background-color: #fff"],
+.wikipedia-content [style*="background-color: #ffffff"],
+.wikipedia-content [style*="background: white"],
+.wikipedia-content [style*="background: #fff"],
+.wikipedia-content [style*="background: #ffffff"] {
+  background-color: #242830 !important;
+  background: #242830 !important;
+  color: #e8e6e3 !important;
+}
+
+/* Override any remaining light colors */
+.wikipedia-content [style*="color: black"],
+.wikipedia-content [style*="color: #000"],
+.wikipedia-content [style*="color: #000000"] {
+  color: #e8e6e3 !important;
+}
+
+/* Performance critical styles */
+.wikipedia-content * {
+  /* Prevent layout thrashing */
+  box-sizing: border-box;
+  /* Optimize for compositing */
+  contain: layout style;
+  will-change: auto;
+}
+
+/* Optimize table rendering for better scroll performance */
+.wikipedia-content table {
+  border-collapse: collapse;
+  margin: 1.25em 0;
+  font-size: 0.95em;
+  background: #242830 !important;
+  width: auto;
+  color: #e8e6e3 !important;
+  /* Performance improvements for tables */
+  contain: layout style paint;
+  transform: translateZ(0);
+  table-layout: fixed;
+  max-width: 100%;
+}
+
+/* Optimize images for scroll performance */
+.wikipedia-content img {
+  max-width: 100%;
+  height: auto;
+  /* Performance optimizations */
+  contain: layout style;
+  will-change: auto;
+  transform: translateZ(0);
+  /* Better loading experience */
+  background: #1c2026;
+  border: 1px solid #30363d;
+}
+
+/* Reduce motion for better performance */
+@media (prefers-reduced-motion: reduce) {
+  .wikipedia-content *,
+  .wiki-scroll-container {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,4 +1,4 @@
-// Wikipedia API integration
+// Wikipedia API client
 
 export interface WikipediaPage {
   pageid: number;
@@ -11,6 +11,7 @@ export interface WikipediaPage {
 
 const WIKIPEDIA_API_BASE = 'https://en.wikipedia.org/w/api.php';
 
+// API response type definitions
 interface RandomItem { id: number; ns: number; title: string }
 interface RandomQueryResponse { query: { random: RandomItem[] } }
 interface ApiError { error: { code?: string; info: string } }
@@ -20,6 +21,7 @@ interface ImageInfoItem { url: string; thumburl?: string }
 interface ImageInfoPage { title: string; imageinfo?: ImageInfoItem[] }
 interface ImageInfoResponse { query?: { pages?: Record<string, ImageInfoPage> } }
 
+// Type guards for API responses
 const isRandomQueryResponse = (d: unknown): d is RandomQueryResponse => {
   if (!d || typeof d !== 'object') return false;
   const obj = d as Record<string, unknown>;
@@ -45,7 +47,7 @@ const isParseResponseShape = (d: unknown): d is ParseResponseShape => {
 
 const isImageInfoResponse = (d: unknown): d is ImageInfoResponse => !!d && typeof d === 'object';
 
-// Cache with LRU eviction
+// Content caching with LRU eviction
 const CACHE_VERSION = 12;
 const contentCache = new Map<string, string>();
 const MAX_CACHE = 40;
@@ -60,7 +62,7 @@ const putCache = (key: string, value: string) => {
 
 export const clearWikipediaCache = () => contentCache.clear();
 
-// Fetch Wikipedia parse data
+// Fetch page content from Wikipedia API
 const fetchParse = async (title: string, signal?: AbortSignal, skin?: 'minerva'): Promise<ParseResponseShape> => {
   const params = new URLSearchParams({
     action: 'parse', format: 'json', formatversion: '2', page: title,
@@ -97,7 +99,7 @@ const extractHtml = (parse: ParseResponseShape): string => {
   return typeof t === 'string' ? t : t['*'];
 };
 
-// Optimized content sanitization
+// Clean and optimize Wikipedia HTML content
 const sanitizeContent = (html: string): { content: string; navboxes: string[] } => {
   const navboxes = html.match(/<div[^>]*class="[^"]*navbox[^"]*"[\s\S]*?<\/div>/gi) ?? [];
   
