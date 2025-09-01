@@ -13,7 +13,7 @@ export const cleanupOldGames = async () => {
   try {
     const now = new Date();
     const abandonThreshold = new Date(now.getTime() - 30 * 60 * 1000); // 30 minutes
-    const deleteThreshold = new Date(now.getTime() - 4 * 60 * 60 * 1000); // 4 hours
+    const deleteThreshold = new Date(now.getTime() - 2 * 60 * 60 * 1000); // 2 hours
     
     await Promise.all([
       prisma.game.updateMany({

@@ -22,7 +22,7 @@ export const chooseValidatedStartAndEndConcurrent = async <PageType extends { ti
   path: string[];
   degrees: number;
 }> => {
-  const { maxDegrees = 4, endAttemptsPerStart = 2, safetyLimit = 10000 } = options;
+  const { maxDegrees = 6, endAttemptsPerStart = 2, safetyLimit = 10000 } = options;
 
   for (let safety = 0; safety < safetyLimit; safety++) {
     const startPage = await getRandomStartMinimal();
@@ -84,7 +84,7 @@ export const chooseValidatedStartAndEndConcurrent = async <PageType extends { ti
       if (!validPath) continue;
       
       const degrees = titles.length - 1;
-      if (degrees > maxDegrees) continue;
+      if (degrees < 2 || degrees > maxDegrees) continue;
       
       const startContent = await startContentPromise;
       const endTitle = titles[titles.length - 1]!;

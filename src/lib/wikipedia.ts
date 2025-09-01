@@ -37,7 +37,7 @@ const isImageInfoResponse = (d: unknown): d is ImageInfoResponse => !!d && typeo
 // Cache with LRU eviction
 const CACHE_VERSION = 12;
 const contentCache = new Map<string, string>();
-const MAX_CACHE = 80;
+const MAX_CACHE = 40;
 const cacheKey = (title: string) => `${CACHE_VERSION}:${title.toLowerCase().trim()}`;
 const putCache = (key: string, value: string) => {
   if (contentCache.size >= MAX_CACHE) {
