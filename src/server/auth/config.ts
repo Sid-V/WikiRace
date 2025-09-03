@@ -1,4 +1,4 @@
-import { type DefaultSession, type NextAuthConfig, type Session as NextAuthSession } from "next-auth";
+import { type DefaultSession, type NextAuthConfig, type Session } from "next-auth";
 import DiscordProvider from "next-auth/providers/discord";
 import { env } from "~/env";
 
@@ -50,12 +50,12 @@ export const authConfig = {
       if (account?.providerAccountId) token.sub = account.providerAccountId;
       return token;
     },
-    async session({ session, token }) {
-      if (token.sub) {
-        (session.user as any).id = token.sub; // minimal augment
+    async session({ session, token }: { session: Session; token: { sub?: string } }) {
+      if (token.sub && session.user) {
+        session.user.id = token.sub;
       }
       return session;
-    }
+    },
   },
   debug: true, // force debug in prod temporarily
 } satisfies NextAuthConfig;
