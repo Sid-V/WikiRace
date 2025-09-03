@@ -1,8 +1,7 @@
 import { type DefaultSession, type NextAuthConfig, type Session as NextAuthSession } from "next-auth";
 import DiscordProvider from "next-auth/providers/discord";
 import { env } from "~/env";
-// Temporarily remove prisma import to isolate session issues
-// import { prisma } from "~/lib/db";
+import { prisma } from "~/lib/db";
 
 declare module "next-auth" {
   interface Session extends DefaultSession {
@@ -13,12 +12,13 @@ declare module "next-auth" {
   }
 }
 
-// Ensure secret present in production so JWT/session cookies can be decrypted across requests
+// Hard fail early in production if secret missing (required for stable JWT/session encryption)
 if (process.env.NODE_ENV === 'production' && !env.AUTH_SECRET) {
-  // Throwing here surfaces the issue during build/runtime instead of failing silently on Vercel
-  throw new Error('AUTH_SECRET is missing in production. Set it (or rename to NEXTAUTH_SECRET and update config).');
+  throw new Error('AUTH_SECRET missing. Set it in Vercel project env before deploying.');
 }
 
+// Minimal, production-safe NextAuth configuration.
+// Strategy: JWT only, Discord provider, create User row on first sign-in so FK constraints for Game/UserStats succeed.
 export const authConfig = {
   providers: [
     DiscordProvider({
@@ -26,68 +26,42 @@ export const authConfig = {
       clientSecret: env.AUTH_DISCORD_SECRET,
     }),
   ],
-  session: {
-    strategy: "jwt",
-  },
-  // Provide secret (required in production) & trust host headers when deployed (Vercel et al.)
-  secret: env.AUTH_SECRET,
-  trustHost: true,
-  // basePath left default (/api/auth)
+  session: { strategy: 'jwt' },
+  secret: env.AUTH_SECRET, // next-auth v5 also auto-detects AUTH_SECRET, but we pass explicitly for clarity
+  trustHost: true, // required on Vercel if using dynamic host headers
   callbacks: {
-    jwt: async ({ token, account, user }) => {
-      // On initial sign-in, account is defined. Use providerAccountId as stable user id (no DB user table yet)
+    // Runs on every JWT encode/update. account is defined only on initial OAuth callback.
+  async jwt({ token, account, profile }) {
+      // Establish stable subject using provider account id (Discord user id)
       if (account?.providerAccountId) {
         token.sub = account.providerAccountId;
+      } else if (!token.sub && profile?.id) {
+        token.sub = profile.id; // fallback
       }
-      // Fallback: ensure sub exists (some providers may not populate providerAccountId expectedly)
-      if (!token.sub && user?.id) token.sub = user.id;
+
+      // Ensure a User DB row exists exactly once (first sign-in) so downstream FK inserts succeed.
+      if (account && token.sub) {
+        try {
+          await prisma.user.upsert({
+            where: { id: token.sub },
+            update: {},
+            create: { id: token.sub },
+          });
+        } catch (e) {
+          // Surface but don't break auth flow – failing here would block login entirely.
+          console.error('User upsert failed during jwt callback', e);
+        }
+      }
       return token;
     },
-    session: async ({ session, token }: { session: NextAuthSession; token: { sub?: string } }) => {
-      const userId = token.sub;
-      
-      if (!userId) {
-        console.error('No userId found in token during session callback');
-        return session;
+    async session({ session, token }: { session: NextAuthSession; token: { sub?: string } }) {
+      if (session.user && token.sub) {
+        // Type augmentation done via module declaration above
+        (session.user as { id?: string }).id = token.sub;
       }
-      
-      // Don't load stats in session callback - causes production failures
-      // Stats should be loaded separately via API when needed
-      return {
-        ...session,
-        user: {
-          ...session.user,
-          id: userId,
-        },
-      };
+      return session;
     },
   },
-  events: {
-    signIn: async ({ account }) => {
-      // Temporarily disable database operations during signIn to isolate session issues
-      const providerAccountId = account?.providerAccountId;
-      if (!providerAccountId) {
-        console.error('No providerAccountId found during signIn event');
-        return;
-      }
-      
-      console.log(`SignIn event for user: ${providerAccountId}`);
-      
-      // TODO: Re-enable database user creation after session issue is resolved
-      /*
-      try {
-        await prisma.user.upsert({ 
-          where: { id: providerAccountId }, 
-          update: {}, 
-          create: { id: providerAccountId } 
-        });
-        console.log(`Successfully processed user: ${providerAccountId}`);
-      } catch (e) {
-        console.error('User creation failed during signIn event:', e);
-      }
-      */
-    },
-  },
-  // Enable verbose logging locally for easier diagnosis
+  // Quiet in production; verbose in dev only
   debug: process.env.NODE_ENV === 'development',
 } satisfies NextAuthConfig;
