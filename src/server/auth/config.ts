@@ -1,8 +1,6 @@
-import type { DefaultSession, Session } from "next-auth";
-import type { AdapterUser } from "next-auth/adapters";
-import { PrismaAdapter } from "@next-auth/prisma-adapter";
+import type { DefaultSession, Account, Session } from "next-auth";
+import type { JWT } from "next-auth/jwt";
 import DiscordProvider from "next-auth/providers/discord";
-import { prisma } from "~/lib/db";
 import { env } from "~/env";
 
 declare module "next-auth" {
@@ -13,8 +11,13 @@ declare module "next-auth" {
   }
 }
 
+declare module "next-auth/jwt" {
+  interface JWT {
+    userId: string;
+  }
+}
+
 export const authOptions = {
-  adapter: PrismaAdapter(prisma),
   providers: [
     DiscordProvider({
       clientId: env.DISCORD_CLIENT_ID,
@@ -23,14 +26,23 @@ export const authOptions = {
   ],
   secret: env.NEXTAUTH_SECRET,
   session: {
-    strategy: "database" as const,
+    strategy: "jwt" as const,
   },
   callbacks: {
-    async session({ session, user }: { session: Session; user: AdapterUser }) {
-      if (session.user) {
-        session.user.id = user.id;
+    async jwt({ token, account }: { token: JWT; account: Account | null }) {
+      // Persist the OAuth account-id to the token right after signin
+      if (account) {
+        token.userId = account.providerAccountId;
+      }
+      return token;
+    },
+    async session({ session, token }: { session: Session; token: JWT }) {
+      // Send properties to the client
+      if (token.userId && session.user) {
+        session.user.id = token.userId;
       }
       return session;
     },
   },
+  debug: process.env.NODE_ENV === "development",
 };
