@@ -3,65 +3,64 @@ import { auth } from "~/server/auth";
 
 export async function GET(request: NextRequest) {
   try {
-    console.log('=== AUTH DEBUG START ===');
-    
-    // Check environment variables
     const envCheck = {
       NODE_ENV: process.env.NODE_ENV,
-      hasAuthSecret: !!process.env.AUTH_SECRET,
-      hasDiscordId: !!process.env.AUTH_DISCORD_ID,
-      hasDiscordSecret: !!process.env.AUTH_DISCORD_SECRET,
-      hasDatabaseUrl: !!process.env.DATABASE_URL,
+      AUTH_SECRET: mask(process.env.AUTH_SECRET),
+      AUTH_DISCORD_ID_present: !!process.env.AUTH_DISCORD_ID,
+      AUTH_DISCORD_SECRET_present: !!process.env.AUTH_DISCORD_SECRET,
+      DATABASE_URL_present: !!process.env.DATABASE_URL,
+      NEXTAUTH_URL: process.env.NEXTAUTH_URL || null,
+      AUTH_URL: process.env.AUTH_URL || null,
+      VERCEL_URL: process.env.VERCEL_URL || null,
     };
-    
-    console.log('Environment check:', envCheck);
-    
-    // Try to get session
-    const session = await auth();
-    console.log('Session result:', {
-      exists: !!session,
-      userId: session?.user?.id,
-      userEmail: session?.user?.email,
-      userName: session?.user?.name,
+
+    // Validate each candidate URL explicitly
+    const urlDiagnostics = ['NEXTAUTH_URL','AUTH_URL','VERCEL_URL'].map(key => {
+      const v = (process.env as Record<string,string|undefined>)[key];
+      if (!v) return { key, value: v ?? null, valid: false, reason: 'unset' };
+      try { new URL(v.startsWith('http') ? v : `https://${v}`); return { key, value: v, valid: true }; }
+      catch (e) { return { key, value: v, valid: false, reason: (e as Error).message }; }
     });
-    
-    // Check cookies
+
+    const session = await auth();
+
     const cookies = request.cookies.getAll();
-    const authCookies = cookies.filter(cookie => 
-      cookie.name.includes('next-auth') || cookie.name.includes('__Secure-next-auth')
-    );
-    
-    console.log('Auth cookies found:', authCookies.length);
-    console.log('Auth cookie names:', authCookies.map(c => c.name));
-    
-    console.log('=== AUTH DEBUG END ===');
-    
+    const authCookies = cookies.filter(c => /next-auth/i.test(c.name));
+
     return NextResponse.json({
       success: true,
-      environment: envCheck,
-      session: {
+      envCheck,
+      urlDiagnostics,
+      sessionSummary: {
         exists: !!session,
-        userId: session?.user?.id,
-        userEmail: session?.user?.email,
-        userName: session?.user?.name,
+        user: session?.user ? {
+          id: session.user.id,
+          name: session.user.name,
+          email: session.user.email,
+          image: session.user.image,
+        } : null,
       },
       cookies: {
         total: cookies.length,
-        authCookies: authCookies.length,
         authCookieNames: authCookies.map(c => c.name),
       },
-      headers: {
+      request: {
         host: request.headers.get('host'),
         userAgent: request.headers.get('user-agent'),
-        forwarded: request.headers.get('x-forwarded-for'),
+        protocolHeader: request.headers.get('x-forwarded-proto'),
       }
     });
   } catch (error) {
-    console.error('Auth debug error:', error);
-    return NextResponse.json({ 
+    return NextResponse.json({
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
+      stack: process.env.NODE_ENV === 'development' && error instanceof Error ? error.stack : undefined,
     }, { status: 500 });
   }
+}
+
+function mask(v?: string) {
+  if (!v) return null;
+  if (v.length <= 6) return '****';
+  return v.slice(0,2) + '***' + v.slice(-2);
 }

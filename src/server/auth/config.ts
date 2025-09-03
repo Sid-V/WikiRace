@@ -103,6 +103,17 @@ export const authConfig = {
       }
     },
   },
+  logger: {
+    error(error) {
+      console.error('[AUTH][error]', error);
+    },
+    warn(code) {
+      console.warn('[AUTH][warn]', code);
+    },
+    debug(code) {
+      if (process.env.NODE_ENV !== 'production') console.log('[AUTH][debug]', code);
+    },
+  },
   // Quiet in production; verbose in dev only
   debug: process.env.NODE_ENV === 'development',
 } satisfies NextAuthConfig;
