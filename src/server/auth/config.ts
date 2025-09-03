@@ -24,6 +24,7 @@ export const authConfig = {
     DiscordProvider({
       clientId: env.AUTH_DISCORD_ID,
       clientSecret: env.AUTH_DISCORD_SECRET,
+      authorization: { params: { scope: 'identify email' } },
     }),
   ],
   session: { strategy: 'jwt' },
@@ -31,35 +32,47 @@ export const authConfig = {
   trustHost: true, // required on Vercel if using dynamic host headers
   callbacks: {
     // Runs on every JWT encode/update. account is defined only on initial OAuth callback.
-  async jwt({ token, account, profile }) {
-      // Establish stable subject using provider account id (Discord user id)
-      if (account?.providerAccountId) {
-        token.sub = account.providerAccountId;
-      } else if (!token.sub && profile?.id) {
-        token.sub = profile.id; // fallback
-      }
+  async jwt({ token, account, user }) {
+      // On first sign-in, account + user are present
+      if (account?.providerAccountId) token.sub = account.providerAccountId;
+      if (!token.sub && (user as { id?: string } | undefined)?.id) token.sub = (user as { id?: string }).id;
 
-      // Ensure a User DB row exists exactly once (first sign-in) so downstream FK inserts succeed.
-      if (account && token.sub) {
-        try {
-          await prisma.user.upsert({
-            where: { id: token.sub },
-            update: {},
-            create: { id: token.sub },
-          });
-        } catch (e) {
-          // Surface but don't break auth flow – failing here would block login entirely.
-          console.error('User upsert failed during jwt callback', e);
-        }
+      // Persist basic profile fields so the session callback can surface them
+      if (user) {
+        if (user.name) token.name = user.name;
+        if (user.email) token.email = user.email;
+        if (user.image) token.picture = user.image;
       }
       return token;
     },
     async session({ session, token }: { session: NextAuthSession; token: { sub?: string } }) {
-      if (session.user && token.sub) {
-        // Type augmentation done via module declaration above
-        (session.user as { id?: string }).id = token.sub;
-      }
+      if (!token.sub) return session; // unauthenticated
+      const t = token as { name?: string; email?: string; picture?: string; image?: string };
+      const name = t.name ?? session.user?.name;
+      const email = t.email ?? session.user?.email;
+  const image = (t.picture ?? t.image) ?? session.user?.image ?? undefined;
+      session.user = {
+        id: token.sub,
+        name: name ?? undefined,
+        email: email ?? undefined,
+        image: image ?? undefined,
+      } as typeof session.user & { id: string };
       return session;
+    },
+  },
+  events: {
+  async signIn({ account, user }) {
+      try {
+  const id = account?.providerAccountId ?? (user as { id?: string } | undefined)?.id;
+        if (!id) return;
+        await prisma.user.upsert({
+          where: { id },
+          update: {},
+          create: { id },
+        });
+      } catch (e) {
+        console.error('User upsert failed in signIn event', e);
+      }
     },
   },
   // Quiet in production; verbose in dev only
