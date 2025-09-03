@@ -1,10 +1,11 @@
 import NextAuth from "next-auth";
-import { cache } from "react";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "./config";
 
-import { authConfig } from "./config";
+const handler = NextAuth(authOptions);
 
-const { auth: uncachedAuth, handlers, signIn, signOut } = NextAuth(authConfig);
+export { handler as GET, handler as POST };
+export default handler;
 
-const auth = cache(uncachedAuth);
-
-export { auth, handlers, signIn, signOut };
+// For server-side session access
+export const auth = () => getServerSession(authOptions);

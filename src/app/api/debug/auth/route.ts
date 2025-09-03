@@ -1,21 +1,21 @@
-import { NextRequest, NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import { auth } from "~/server/auth";
 
 export async function GET(request: NextRequest) {
   try {
     const envCheck = {
       NODE_ENV: process.env.NODE_ENV,
-      AUTH_SECRET: mask(process.env.AUTH_SECRET),
-      AUTH_DISCORD_ID_present: !!process.env.AUTH_DISCORD_ID,
-      AUTH_DISCORD_SECRET_present: !!process.env.AUTH_DISCORD_SECRET,
+      NEXTAUTH_SECRET: mask(process.env.NEXTAUTH_SECRET),
+      DISCORD_CLIENT_ID_present: !!process.env.DISCORD_CLIENT_ID,
+      DISCORD_CLIENT_SECRET_present: !!process.env.DISCORD_CLIENT_SECRET,
       DATABASE_URL_present: !!process.env.DATABASE_URL,
       NEXTAUTH_URL: process.env.NEXTAUTH_URL ?? null,
-      AUTH_URL: process.env.AUTH_URL ?? null,
       VERCEL_URL: process.env.VERCEL_URL ?? null,
     };
 
     // Validate each candidate URL explicitly
-    const urlDiagnostics = ['NEXTAUTH_URL','AUTH_URL','VERCEL_URL'].map(key => {
+    const urlDiagnostics = ['NEXTAUTH_URL','VERCEL_URL'].map(key => {
       const v = (process.env as Record<string,string|undefined>)[key];
       if (!v) return { key, value: v ?? null, valid: false, reason: 'unset' };
       try { new URL(v.startsWith('http') ? v : `https://${v}`); return { key, value: v, valid: true }; }
