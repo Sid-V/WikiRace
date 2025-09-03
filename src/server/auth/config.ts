@@ -17,6 +17,34 @@ if (process.env.NODE_ENV === 'production' && !env.AUTH_SECRET) {
   throw new Error('AUTH_SECRET missing. Set it in Vercel project env before deploying.');
 }
 
+// Additional production sanity checks – a missing Discord credential often surfaces as a generic Configuration error
+if (process.env.NODE_ENV === 'production') {
+  const missing: string[] = [];
+  if (!process.env.AUTH_DISCORD_ID) missing.push('AUTH_DISCORD_ID');
+  if (!process.env.AUTH_DISCORD_SECRET) missing.push('AUTH_DISCORD_SECRET');
+  if (missing.length) {
+    throw new Error('Missing required Discord env vars: ' + missing.join(', '));
+  }
+}
+
+// Guard against invalid NEXTAUTH_URL / AUTH_URL (e.g. set to "/auth") which causes "TypeError: Invalid URL"
+(() => {
+  const raw = process.env.NEXTAUTH_URL || process.env.AUTH_URL;
+  if (!raw) return; // NextAuth will fallback to inferred URL (host header)
+  try {
+    // Validate; throws if invalid / relative
+    // eslint-disable-next-line no-new
+    new URL(raw);
+  } catch {
+    const fallbackHost = process.env.VERCEL_URL; // e.g. my-app.vercel.app
+    if (fallbackHost) {
+      process.env.NEXTAUTH_URL = `https://${fallbackHost}`;
+    } else {
+      delete process.env.NEXTAUTH_URL; // let library compute locally
+    }
+  }
+})();
+
 // Minimal, production-safe NextAuth configuration.
 // Strategy: JWT only, Discord provider, create User row on first sign-in so FK constraints for Game/UserStats succeed.
 export const authConfig = {
