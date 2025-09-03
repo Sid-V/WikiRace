@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
     const session = await auth();
 
     const cookies = request.cookies.getAll();
-    const authCookies = cookies.filter(c => /next-auth/i.test(c.name));
+  const authCookies = cookies.filter(c => /(next-auth|authjs)/i.test(c.name));
 
     return NextResponse.json({
       success: true,
