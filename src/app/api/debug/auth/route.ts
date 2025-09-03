@@ -9,9 +9,9 @@ export async function GET(request: NextRequest) {
       AUTH_DISCORD_ID_present: !!process.env.AUTH_DISCORD_ID,
       AUTH_DISCORD_SECRET_present: !!process.env.AUTH_DISCORD_SECRET,
       DATABASE_URL_present: !!process.env.DATABASE_URL,
-      NEXTAUTH_URL: process.env.NEXTAUTH_URL || null,
-      AUTH_URL: process.env.AUTH_URL || null,
-      VERCEL_URL: process.env.VERCEL_URL || null,
+      NEXTAUTH_URL: process.env.NEXTAUTH_URL ?? null,
+      AUTH_URL: process.env.AUTH_URL ?? null,
+      VERCEL_URL: process.env.VERCEL_URL ?? null,
     };
 
     // Validate each candidate URL explicitly
