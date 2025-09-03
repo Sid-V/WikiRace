@@ -8,7 +8,6 @@ export async function GET(request: NextRequest) {
     // Check environment variables
     const envCheck = {
       NODE_ENV: process.env.NODE_ENV,
-      NEXTAUTH_URL: process.env.NEXTAUTH_URL,
       hasAuthSecret: !!process.env.AUTH_SECRET,
       hasDiscordId: !!process.env.AUTH_DISCORD_ID,
       hasDiscordSecret: !!process.env.AUTH_DISCORD_SECRET,
