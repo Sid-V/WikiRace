@@ -13,6 +13,12 @@ declare module "next-auth" {
   }
 }
 
+// Ensure secret present in production so JWT/session cookies can be decrypted across requests
+if (process.env.NODE_ENV === 'production' && !env.AUTH_SECRET) {
+  // Throwing here surfaces the issue during build/runtime instead of failing silently on Vercel
+  throw new Error('AUTH_SECRET is missing in production. Set it (or rename to NEXTAUTH_SECRET and update config).');
+}
+
 export const authConfig = {
   providers: [
     DiscordProvider({
@@ -23,13 +29,18 @@ export const authConfig = {
   session: {
     strategy: "jwt",
   },
-  // Explicitly set base URL for production
-  basePath: "/api/auth",
+  // Provide secret (required in production) & trust host headers when deployed (Vercel et al.)
+  secret: env.AUTH_SECRET,
+  trustHost: true,
+  // basePath left default (/api/auth)
   callbacks: {
-    jwt: async ({ token, account }) => {
+    jwt: async ({ token, account, user }) => {
+      // On initial sign-in, account is defined. Use providerAccountId as stable user id (no DB user table yet)
       if (account?.providerAccountId) {
         token.sub = account.providerAccountId;
       }
+      // Fallback: ensure sub exists (some providers may not populate providerAccountId expectedly)
+      if (!token.sub && user?.id) token.sub = user.id;
       return token;
     },
     session: async ({ session, token }: { session: NextAuthSession; token: { sub?: string } }) => {
@@ -77,4 +88,6 @@ export const authConfig = {
       */
     },
   },
+  // Enable verbose logging locally for easier diagnosis
+  debug: process.env.NODE_ENV === 'development',
 } satisfies NextAuthConfig;
