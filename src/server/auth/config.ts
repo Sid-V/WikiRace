@@ -29,7 +29,7 @@ if (process.env.NODE_ENV === 'production') {
 
 // Guard against invalid NEXTAUTH_URL / AUTH_URL (e.g. set to "/auth") which causes "TypeError: Invalid URL"
 (() => {
-  const raw = process.env.NEXTAUTH_URL || process.env.AUTH_URL;
+  const raw = process.env.NEXTAUTH_URL ?? process.env.AUTH_URL;
   if (!raw) return; // NextAuth will fallback to inferred URL (host header)
   try {
     // Validate; throws if invalid / relative
