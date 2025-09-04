@@ -7,16 +7,15 @@ A competitive Wikipedia navigation game where players race from one Wikipedia pa
 
 Navigate from a random starting Wikipedia page to a target page using only the links within articles. The challenge is to reach your destination with the fewest clicks and fastest time possible. Our Six Degrees of Wikipedia algorithm ensures every game has a solution within 4-6 degrees of separation.
 
-**Play here: [https://wiki-race.vercel.app/](https://wiki-race.vercel.app/)**
+**Play here: [https://wikirace.sidv.me](https://wikirace.sidv.me)**
 
 ## ✨ Features
 
-- 🔐 **Secure Discord Authentication** - Login with your Discord account
+- 🔐 **Secure Discord Authentication** - Login with your Discord/Google account to save stats
 - 📊 **Personal Statistics** - Track games played, fastest times, and averages
 - 🗺️ **Path Visualization** - See your complete navigation history
 - ⬅️ **Backtrack Support** - Go back if you take a wrong turn
 - 🎯 **Smart Game Generation** - Algorithm ensures all games are solvable
-- 📱 **Responsive Design** - Play on desktop or mobile
 - 🌙 **Dark Mode Interface** - Easy on the eyes
 
 ## 🚀 Getting Started
@@ -25,8 +24,8 @@ Navigate from a random starting Wikipedia page to a target page using only the l
 
 - Node.js 18+ 
 - pnpm
-- PostgreSQL database (we recommend [Neon](https://neon.tech/))
-- Discord OAuth application
+- PostgreSQL database (I used [Neon](https://neon.tech/))
+- Clerk Auth
 
 ### Environment Setup
 
@@ -51,12 +50,9 @@ Required environment variables:
 # Database
 DATABASE_URL="postgresql://username:password@host:port/database"
 
-# NextAuth (use `npx auth secret` to generate)
-AUTH_SECRET="your-secret-key"
-
-# Discord OAuth
-AUTH_DISCORD_ID="your-discord-client-id"
-AUTH_DISCORD_SECRET="your-discord-client-secret"
+# Clerk Auth
+CLERK_SECRET_KEY=""
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=""
 ```
 
 4. Set up the database:
@@ -148,7 +144,7 @@ pnpm typecheck    # TypeScript checking only
 ## 🛠️ Technology Stack
 
 - **Framework**: [Next.js](https://nextjs.org) with App Router
-- **Authentication**: [NextAuth.js](https://next-auth.js.org) with Discord provider  
+- **Authentication**: [Clerk](https://clerk.com) with Discord/Google provider  
 - **Database**: [Prisma](https://prisma.io) ORM with PostgreSQL
 - **Styling**: [Tailwind CSS](https://tailwindcss.com) + [shadcn/ui](https://ui.shadcn.com/)
 - **Deployment**: [Vercel](https://vercel.com)
