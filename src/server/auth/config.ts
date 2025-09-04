@@ -29,6 +29,44 @@ declare module "next-auth/jwt" {
 export const authConfig: NextAuthOptions = {
   session: {
     strategy: "jwt",
+    // 30 days session expiry
+    maxAge: 30 * 24 * 60 * 60,
+    // Update session every 24 hours
+    updateAge: 24 * 60 * 60,
+  },
+  jwt: {
+    // JWT token expiry should match session maxAge
+    maxAge: 30 * 24 * 60 * 60,
+  },
+  cookies: {
+    sessionToken: {
+      name: `${process.env.NODE_ENV === 'production' ? '__Secure-' : ''}next-auth.session-token`,
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: process.env.NODE_ENV === 'production',
+        // 30 days in seconds
+        maxAge: 30 * 24 * 60 * 60,
+      },
+    },
+    callbackUrl: {
+      name: `${process.env.NODE_ENV === 'production' ? '__Secure-' : ''}next-auth.callback-url`,
+      options: {
+        sameSite: 'lax',
+        path: '/',
+        secure: process.env.NODE_ENV === 'production',
+      },
+    },
+    csrfToken: {
+      name: `${process.env.NODE_ENV === 'production' ? '__Host-' : ''}next-auth.csrf-token`,
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: process.env.NODE_ENV === 'production',
+      },
+    },
   },
   callbacks: {
     session: ({ session, token }: { session: DefaultSession; token: JWT }) => ({
@@ -38,6 +76,13 @@ export const authConfig: NextAuthOptions = {
         id: token.sub,
       },
     }),
+    jwt: async ({ token, user, account }) => {
+      // Persist user id in token for session callback
+      if (user) {
+        token.sub = user.id;
+      }
+      return token;
+    },
   },
   providers: [
     DiscordProvider({
