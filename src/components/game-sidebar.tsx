@@ -6,7 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Clock, Target, RotateCcw, ArrowLeft, Home, ExternalLink } from "lucide-react";
 import { GameTimer } from "./game-timer";
 import { ModeToggle } from "./mode-toggle";
-import { AuthButton } from "./auth-button";
 import { useGameSession, useGameProgress, useGamePath, useGameActions } from '~/contexts/game-context';
 
 import LazyStatsDialog from './lazy-stats-dialog';
@@ -185,9 +184,6 @@ const BottomControls = memo(() => {
         <Suspense fallback={<Button variant="secondary" size="sm" disabled>Loading...</Button>}>
           <LazyStatsDialog />
         </Suspense>
-        <div className="scale-110">
-          <AuthButton />
-        </div>
       </div>
     </div>
   );

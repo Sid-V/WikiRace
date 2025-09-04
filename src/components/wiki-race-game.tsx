@@ -6,7 +6,6 @@ import { getRandomPage, getPageContent, type WikipediaPage } from "~/lib/wikiped
 import { chooseValidatedStartAndEndConcurrent } from "~/lib/six-degrees";
 import type { GameSession } from "~/contexts/game-context";
 
-// Lazy loaded components
 const GameSidebar = lazy(() => import("./game-sidebar").then(m => ({ default: m.GameSidebar })));
 const GameContent = lazy(() => import("./game-content").then(m => ({ default: m.GameContent })));
 const GameHeader = lazy(() => import("./game-content").then(m => ({ default: m.GameHeader })));
@@ -16,12 +15,10 @@ const GameHomepage = lazy(() => import("./game-homepage").then(m => ({ default: 
 
 interface BackendGameStartResponse { gameId: string }
 
-// Game logic hook
 function useGameLogic() {
   const gameSession = useGameSession();
   const actions = useGameActions();
 
-  // Start new game
   const startNewGame = useCallback(async () => {
     actions.setLoading(true);
     actions.setError(null);
@@ -58,6 +55,22 @@ function useGameLogic() {
         solutionDistance: degrees,
       };
 
+      if (backendGameId) {
+        try {
+          await fetch('/api/game/update', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              gameId: backendGameId,
+              startPage: startPageData.page.title,
+              endPage: endPage.title
+            })
+          });
+        } catch (error) {
+          console.error('Failed to update game with pages:', error);
+        }
+      }
+
       actions.setContent(startPageData.content);
       actions.setGameSession(newSession);
 
@@ -71,7 +84,6 @@ function useGameLogic() {
     }
   }, [actions]);
 
-  // Send completion data to server when game ends
   useEffect(() => {
     const sendFinish = async () => {
       if (!gameSession?.completed || !gameSession.endTime) return;
@@ -92,12 +104,9 @@ function useGameLogic() {
     void sendFinish();
   }, [gameSession?.completed, gameSession?.endTime, gameSession?.id, gameSession?.startPage.title, gameSession?.endPage.title, gameSession?.path.length]);
 
-  return {
-    startNewGame,
-  };
+  return { startNewGame };
 }
 
-// Main game container
 function GameContainer() {
   const gameSession = useGameSession();
   const { isLoading } = useUIState();
@@ -149,7 +158,6 @@ function GameContainer() {
   );
 }
 
-// Main game component with context provider
 export function WikiRaceGame() {
   return (
     <GameProvider>

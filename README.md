@@ -78,7 +78,7 @@ Visit [http://localhost:3000](http://localhost:3000) to play!
 - **Game Engine** (`src/components/wiki-race-game.tsx`) - Main game logic and UI
 - **Wikipedia API** (`src/lib/wikipedia.ts`) - Content fetching and sanitization  
 - **Six Degrees Algorithm** (`src/lib/six-degrees.ts`) - Ensures game solvability
-- **Authentication** (`src/server/auth/`) - Discord OAuth with NextAuth.js
+- **Authentication** - Clerk authentication with Discord/Google support
 - **Database Layer** (`src/lib/db.ts`) - Prisma ORM with automated cleanup
 
 ### API Routes

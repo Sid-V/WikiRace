@@ -1,35 +1,35 @@
 import { NextResponse } from 'next/server';
-import { auth } from '~/server/auth';
+import { getAuthenticatedUserId } from '~/lib/auth-helpers';
 import { prisma } from '~/lib/db';
 
 export const POST = async (request: Request) => {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const userId = await getAuthenticatedUserId();
+  
+  if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
-    const body: unknown = await request.json();
-    const gameId = body && typeof body === 'object' && 'gameId' in body ? body.gameId : null;
+    const body = await request.json() as { gameId?: string };
+    const gameId = body.gameId;
+    
     if (!gameId || typeof gameId !== 'string') {
       return NextResponse.json({ error: 'Game ID required' }, { status: 400 });
     }
 
-    await prisma.game.updateMany({
-      where: { 
-        id: gameId, 
-        userId: session.user.id, 
-        status: 'IN_PROGRESS' 
-      },
+    const result = await prisma.game.updateMany({
+      where: { id: gameId, userId, status: 'IN_PROGRESS' },
       data: { status: 'ABANDONED' }
     });
 
+    if (result.count === 0) {
+      return NextResponse.json({ error: 'Game not found or already finished' }, { status: 404 });
+    }
+
+    console.log(`🔄 Game abandoned for user ${userId}: ${gameId}`);
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
     console.error('Game abandon failed', error);
-    const detail = process.env.NODE_ENV === 'development' && error instanceof Error 
-      ? { message: error.message } 
-      : {};
-    return NextResponse.json({ error: 'Failed to abandon game', ...detail }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to abandon game' }, { status: 500 });
   }
 };

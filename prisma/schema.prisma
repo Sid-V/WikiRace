@@ -1,6 +1,3 @@
-// Prisma schema for WikiRace stats feature
-// Using Neon Postgres
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,31 +7,25 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum GameStatus {
-  IN_PROGRESS
-  COMPLETED
-  ABANDONED
-}
-
 model User {
-  id            String      @id                  // Discord providerAccountId stored directly
-  createdAt     DateTime    @default(now())
-  games         Game[]
-  userStats     UserStats?
+  id        String     @id
+  createdAt DateTime   @default(now())
+  games     Game[]
+  userStats UserStats?
 }
 
 model Game {
-  id              String   @id @default(cuid())
+  id              String     @id @default(cuid())
   userId          String
-  user            User     @relation(fields: [userId], references: [id])
   startPage       String
   endPage         String
-  startTime       DateTime @default(now())
+  startTime       DateTime   @default(now())
   endTime         DateTime?
   durationSeconds Int?
   clicks          Int?
-  createdAt       DateTime @default(now())
+  createdAt       DateTime   @default(now())
   status          GameStatus @default(IN_PROGRESS)
+  user            User       @relation(fields: [userId], references: [id])
 
   @@index([userId, createdAt])
   @@index([status, startTime])
@@ -42,9 +33,15 @@ model Game {
 
 model UserStats {
   userId                 String   @id
-  user                   User     @relation(fields: [userId], references: [id])
   gamesPlayed            Int      @default(0)
   totalDurationSeconds   BigInt   @default(0)
   fastestDurationSeconds Int?
   updatedAt              DateTime @updatedAt
+  user                   User     @relation(fields: [userId], references: [id])
+}
+
+enum GameStatus {
+  IN_PROGRESS
+  COMPLETED
+  ABANDONED
 }

@@ -1,27 +1,42 @@
 import { NextResponse } from 'next/server';
-import { auth } from '~/server/auth';
+import { getOrCreateAuthenticatedUser } from '~/lib/auth-helpers';
 import { prisma, cleanupOldGames } from '~/lib/db';
 
 export const POST = async () => {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const userId = await getOrCreateAuthenticatedUser();
+  
+  if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
-    void cleanupOldGames();
+    await cleanupOldGames();
+
+    const existingGame = await prisma.game.findFirst({
+      where: { userId, status: 'IN_PROGRESS' }
+    });
+
+    if (existingGame) {
+      return NextResponse.json({ 
+        error: 'You already have a game in progress',
+        gameId: existingGame.id 
+      }, { status: 409 });
+    }
 
     const game = await prisma.game.create({
-      data: { userId: session.user.id, startPage: 'UNKNOWN', endPage: 'UNKNOWN' },
-      select: { id: true },
+      data: {
+        userId,
+        startPage: 'PENDING',
+        endPage: 'PENDING',
+        startTime: new Date(),
+        status: 'IN_PROGRESS'
+      }
     });
-    
-    return NextResponse.json({ gameId: game.id }, { status: 201 });
+
+    console.log(`✅ Game started for user ${userId}: ${game.id}`);
+    return NextResponse.json({ gameId: game.id, startTime: game.startTime });
   } catch (error: unknown) {
-    console.error('Game start failed', error);
-    const detail = process.env.NODE_ENV === 'development' && error instanceof Error 
-      ? { message: error.message } 
-      : {};
-    return NextResponse.json({ error: 'Failed to start game', ...detail }, { status: 500 });
+    console.error('Start game error:', error);
+    return NextResponse.json({ error: 'Failed to start game' }, { status: 500 });
   }
 };

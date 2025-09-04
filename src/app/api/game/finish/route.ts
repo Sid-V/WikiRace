@@ -1,28 +1,31 @@
 import { NextResponse } from 'next/server';
-import { auth } from '~/server/auth';
+import { getAuthenticatedUserId } from '~/lib/auth-helpers';
 import { prisma, cleanupOldGames } from '~/lib/db';
 
-interface FinishBody {
-  gameId: string;
-  startPage: string;
-  endPage: string;
-  clicks: number;
-}
-
 export const POST = async (request: Request) => {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const userId = await getAuthenticatedUserId();
+  
+  if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   
-  const body = (await request.json()) as Partial<FinishBody>;
+  const body = await request.json() as { 
+    gameId?: string; 
+    startPage?: string; 
+    endPage?: string; 
+    clicks?: number; 
+  };
+  
   if (!body.gameId || !body.startPage || !body.endPage || typeof body.clicks !== 'number') {
     return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
   }
 
   try {
     const result = await prisma.$transaction(async (tx) => {
-      const game = await tx.game.findUnique({ where: { id: body.gameId } });
+      const game = await tx.game.findFirst({ 
+        where: { id: body.gameId, userId } 
+      });
+      
       if (!game || game.endTime) {
         return { error: 'Game already finalized or not found' } as const;
       }
@@ -41,21 +44,22 @@ export const POST = async (request: Request) => {
       const durationSeconds = Math.max(1, Math.floor((updatedGame.endTime!.getTime() - updatedGame.startTime.getTime()) / 1000));
       await tx.game.update({ where: { id: game.id }, data: { durationSeconds } });
 
-      const existingStats = await tx.userStats.findUnique({ where: { userId: session.user.id } });
+      const existingStats = await tx.userStats.findUnique({ where: { userId } });
       if (!existingStats) {
         const stats = await tx.userStats.create({
           data: {
-            userId: session.user.id,
+            userId,
             gamesPlayed: 1,
             totalDurationSeconds: BigInt(durationSeconds),
             fastestDurationSeconds: durationSeconds,
           },
         });
         const avg = Number(stats.totalDurationSeconds) / stats.gamesPlayed;
+        console.log(`✅ Game finished for user ${userId}: ${body.gameId} (first game, ${durationSeconds}s)`);
         return { durationSeconds, fastestDurationSeconds: stats.fastestDurationSeconds, averageDurationSeconds: Math.round(avg), gamesPlayed: stats.gamesPlayed } as const;
       } else {
         const stats = await tx.userStats.update({
-          where: { userId: session.user.id },
+          where: { userId },
           data: {
             gamesPlayed: { increment: 1 },
             totalDurationSeconds: { increment: BigInt(durationSeconds) },
@@ -63,6 +67,7 @@ export const POST = async (request: Request) => {
           },
         });
         const avg = Number(stats.totalDurationSeconds) / stats.gamesPlayed;
+        console.log(`✅ Game finished for user ${userId}: ${body.gameId} (${stats.gamesPlayed} games, ${durationSeconds}s)`);
         return { durationSeconds, fastestDurationSeconds: stats.fastestDurationSeconds, averageDurationSeconds: Math.round(avg), gamesPlayed: stats.gamesPlayed } as const;
       }
     });
